@@ -19,7 +19,12 @@ public class MyErrorListener extends BaseErrorListener
         {
             errorMessage = msg;
         }
-        errors.add(String.format("Error type A at Line %d: %s", line, errorMessage));
+
+        if (recognizer instanceof Lexer) {
+            errors.add(String.format("Error type A at Line %d: %s", line, errorMessage));
+        } else {
+            errors.add(String.format("Error type B at Line %d: %s", line, errorMessage));
+        }
     }
 
     public boolean hasErrors()
@@ -29,9 +34,17 @@ public class MyErrorListener extends BaseErrorListener
 
     public void printLexerErrorInformation()
     {
-        for (String error : errors)
-        {
-            System.err.println(error);
+        for (String error : errors) {
+            if (error.startsWith("Error type A"))
+                System.err.println(error);
+        }
+    }
+
+    public void printParserErrorInformation()
+    {
+        for (String error : errors) {
+            if (error.startsWith("Error type B"))
+                System.out.println(error);
         }
     }
 }

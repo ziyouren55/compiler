@@ -119,7 +119,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
 
             return result.toString();
         }
-        return "ConstInitVal miss";
+        return "ConstInitVal miss\nConstInitVal miss\nConstInitVal miss\n";
     }
 
     @Override

@@ -57,7 +57,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
         {
             return visit(ctx.varDecl());
         }
-        return "Decl miss";
+        return "Decl miss\nDecl miss\nDecl miss\n";
     }
 
     @Override

@@ -3,7 +3,7 @@ parser grammar SysYParser;
 options { tokenVocab=SysYLexer; }
 
 compUnit
-    : (decl | funcDef)* EOF
+    : (decl | funcDef) (decl | funcDef)* EOF
     ;
 
 decl

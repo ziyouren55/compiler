@@ -41,7 +41,7 @@ public class Main {
             String formattedCode = formatter.visit(tree);
             System.out.println(formattedCode);
             //shan
-            //System.out.println(check(formattedCode));
+            System.out.println(check(formattedCode));
         }
         return tree;
     }
@@ -76,23 +76,27 @@ public class Main {
     public static boolean check(String result)
     {
         String exp = "int main() {\n" +
-            "    if (1)\n" +
-            "        if (2)\n" +
-            "            if (3)\n" +
-            "                a = 1;\n" +
-            "            else if (4)\n" +
-            "                a = 5;\n" +
-            "            else\n" +
-            "                a = 2;\n" +
-            "        else\n" +
-            "            a = 3;\n" +
-            "    else\n" +
-            "        a = 4;\n" +
-            "    while (1)\n" +
-            "        while (2)\n" +
-            "            while (3)\n" +
-            "                ;\n" +
-            "    return;\n" +
+            "    int a = 0;\n" +
+            "    if (a > 0) {\n" +
+            "        return -!a;\n" +
+            "    }\n" +
+            "    else if (a < 1) {\n" +
+            "        if (1 == 2) \n" +
+            "            return 0;\n" +
+            "        else if (n == x) {\n" +
+            "        }\n" +
+            "        else {\n" +
+            "            return 0;\n" +
+            "        }\n" +
+            "        return +a;\n" +
+            "    }\n" +
+            "    else {\n" +
+            "        if (a == 0) {\n" +
+            "        }\n" +
+            "        else if (a == a) {\n" +
+            "        }\n" +
+            "    }\n" +
+            "    return -a;\n" +
             "}";
         return result.equals(exp);
     }

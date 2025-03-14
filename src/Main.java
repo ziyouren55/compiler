@@ -5,6 +5,8 @@ import org.antlr.v4.runtime.tree.ParseTree;
 
 import java.io.IOException;
 
+//java -jar .\lib\antlr-4.9.1-complete.jar -listener -visitor -long-messages .\src\SysYLexer.g4 .\src\SysYParser.g4
+
 public class Main {
 
     public static void main(String[] args) throws IOException
@@ -65,12 +67,30 @@ public class Main {
 //        {
 //            for (Token token : tokens.getTokens())
 //            {
-//                String tokenStr = SysYLexer.VOCABULARY.getSymbolicName(token.getType()) + " " + token.getText() + " at Line " + token.getLine() + ".";
+//                String tokenText = token.getText();
+//                if(token.getType() == SysYLexer.INTEGER_CONST)
+//                {
+//                    tokenText = convertToDecimal(tokenText);
+//                }
+//                String tokenStr = SysYLexer.VOCABULARY.getSymbolicName(token.getType()) + " " + tokenText + " at Line " + token.getLine() + ".";
 //                System.err.println(tokenStr);
 //            }
 //        }
 
         return tokens;
+    }
+
+    public static String convertToDecimal(String input) {
+        if (input.startsWith("0x") || input.startsWith("0X")) {
+            // 处理十六进制
+            return String.valueOf(Integer.parseInt(input.substring(2), 16));
+        } else if (input.startsWith("0") && input.length() > 1) {
+            // 处理八进制
+            return String.valueOf(Integer.parseInt(input.substring(1), 8));
+        } else {
+            // 处理十进制
+            return input;
+        }
     }
 
     public static boolean check(String result)

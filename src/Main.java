@@ -43,7 +43,7 @@ public class Main {
             String formattedCode = formatter.visit(tree);
             System.out.println(formattedCode);
             //shan
-//            System.out.println(check(formattedCode));
+            //System.out.println(check(formattedCode));
         }
         return tree;
     }
@@ -100,28 +100,57 @@ public class Main {
 
     public static boolean check(String result)
     {
-        String exp = "int main() {\n" +
-            "    int a = 0;\n" +
-            "    if (a > 0) {\n" +
-            "        return -!a;\n" +
-            "    }\n" +
-            "    else if (a < 1) {\n" +
-            "        if (1 == 2) \n" +
-            "            return 0;\n" +
-            "        else if (n == x) {\n" +
+        String exp = "void main() {\n" +
+            "    int i = 0;\n" +
+            "    while (i < 10) {\n" +
+            "        if (i % 2 == 0) {\n" +
+            "            x = x + i;\n" +
             "        }\n" +
             "        else {\n" +
-            "            return 0;\n" +
+            "            y[i] = x * i;\n" +
             "        }\n" +
-            "        return +a;\n" +
+            "        i = i + 1;\n" +
+            "    }\n" +
+            "    return;\n" +
+            "}\n" +
+            "const int a = 10;\n" +
+            "const int b = 20;\n" +
+            "const int arr[2] = {1, 2};\n" +
+            "int x = 5;\n" +
+            "int y[10];\n" +
+            "int z = {1, 2, 3};\n" +
+            "\n" +
+            "int sum(int x, int y) {\n" +
+            "    return x + y;\n" +
+            "}\n" +
+            "\n" +
+            "void test() {\n" +
+            "    int result = sum(a, b);\n" +
+            "    if (result > 10) {\n" +
+            "        result = result - 10;\n" +
+            "    }\n" +
+            "    else if (result < 20) {\n" +
+            "        result = result + 10;\n" +
+            "    }\n" +
+            "    return;\n" +
+            "}\n" +
+            "\n" +
+            "int factorial(int n) {\n" +
+            "    if (n <= 1) {\n" +
+            "        return 1;\n" +
             "    }\n" +
             "    else {\n" +
-            "        if (a == 0) {\n" +
-            "        }\n" +
-            "        else if (a == a) {\n" +
-            "        }\n" +
+            "        return n * factorial(n - 1);\n" +
             "    }\n" +
-            "    return -a;\n" +
+            "}\n" +
+            "\n" +
+            "void calculate() {\n" +
+            "    int num = 5;\n" +
+            "    int fact = factorial(num);\n" +
+            "    while (count < max) {\n" +
+            "        count = count + 1;\n" +
+            "    }\n" +
+            "    return;\n" +
             "}";
         return result.equals(exp);
     }

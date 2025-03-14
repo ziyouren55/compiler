@@ -18,7 +18,7 @@ public class Main {
         CharStream input = CharStreams.fromFileName(source);
 
         CommonTokenStream tokens = lexerAnalysis(input);
-//        ParseTree tree = parserAnalysis(tokens);
+        ParseTree tree = parserAnalysis(tokens);
 
     }
 
@@ -63,19 +63,24 @@ public class Main {
         {
             errorListener.printLexerErrorInformation();
         }
-        else
-        {
-            for (Token token : tokens.getTokens())
-            {
-                String tokenText = token.getText();
-                if(token.getType() == SysYLexer.INTEGER_CONST)
-                {
-                    tokenText = convertToDecimal(tokenText);
-                }
-                String tokenStr = SysYLexer.VOCABULARY.getSymbolicName(token.getType()) + " " + tokenText + " at Line " + token.getLine() + ".";
-                System.err.println(tokenStr);
-            }
-        }
+//        else
+//        {
+//            for (Token token : tokens.getTokens())
+//            {
+//                if (token.getType() == SysYLexer.EOF)
+//                {
+//                    continue;  // Skip EOF token
+//                }
+//
+//                String tokenText = token.getText();
+//                if(token.getType() == SysYLexer.INTEGER_CONST)
+//                {
+//                    tokenText = convertToDecimal(tokenText);
+//                }
+//                String tokenStr = SysYLexer.VOCABULARY.getSymbolicName(token.getType()) + " " + tokenText + " at Line " + token.getLine() + ".";
+//                System.err.println(tokenStr);
+//            }
+//        }
 
         return tokens;
     }

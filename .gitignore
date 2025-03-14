@@ -9,6 +9,7 @@
 /src/*ParserVisitor.java
 /classes
 .DS_Store
+/gen
 /out
 /.idea
 /Lab.iml

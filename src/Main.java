@@ -41,7 +41,7 @@ public class Main {
             String formattedCode = formatter.visit(tree);
             System.out.println(formattedCode);
             //shan
-            System.out.println(check(formattedCode));
+//            System.out.println(check(formattedCode));
         }
         return tree;
     }

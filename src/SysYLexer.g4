@@ -42,10 +42,15 @@ SEMICOLON: ';';
 IDENT    : [a-zA-Z_][a-zA-Z_0-9]*;
 
  //数字常量（支持前导 0）
-INTEGER_CONST :  '0x' [0-9a-fA-F]+
-        | '0X' [0-9a-fA-F]+
-        | '0' [0-7]+
-        | [1-9][0-9]*;
+INTEGER_CONST :  '0x' [0-9a-fA-F]+ {
+    setText(String.valueOf(Integer.parseInt(getText().substring(2).replaceFirst("^0+", ""), 16)));
+}
+        | '0' [0-7]+ {
+    setText(String.valueOf(Integer.parseInt(getText().substring(1).replaceFirst("^0+", "0"), 8)));
+}
+        | [0-9]+;
+
+
 
 // 空白符，跳过
 WS       : [ \r\n\t]+ -> skip;

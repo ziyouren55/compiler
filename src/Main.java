@@ -68,10 +68,10 @@ public class Main {
             for (Token token : tokens.getTokens())
             {
                 String tokenText = token.getText();
-//                if(token.getType() == SysYLexer.INTEGER_CONST)
-//                {
-//                    tokenText = convertToDecimal(tokenText);
-//                }
+                if(token.getType() == SysYLexer.INTEGER_CONST)
+                {
+                    tokenText = convertToDecimal(tokenText);
+                }
                 String tokenStr = SysYLexer.VOCABULARY.getSymbolicName(token.getType()) + " " + tokenText + " at Line " + token.getLine() + ".";
                 System.err.println(tokenStr);
             }

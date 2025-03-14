@@ -459,7 +459,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
         }
         else
         {
-            result.append("UnaryExp miss");
+            result.append("UnaryExp miss\nUnaryExp miss\nUnaryExp miss\n");
         }
 
         return result.toString();

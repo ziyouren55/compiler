@@ -37,7 +37,7 @@ public class Main {
         }
         else
         {
-            parserVisitor formatter = new parserVisitor();
+            FormaterVisitor formatter = new FormaterVisitor();
             String formattedCode = formatter.visit(tree);
             System.out.println(formattedCode);
             //shan

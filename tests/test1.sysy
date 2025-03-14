@@ -1,22 +1,40 @@
-int array()
-{
-    int arr[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-
-    int a1 = 0, a2 = 3, a3 = 5, a4 = 7, a5 = 9, a6 = 1, a7 = 2, a8 = 4,
-        a9 = 6;
-
-    return arr[a1] + arr[a2] + arr[a3] + arr[a4] + arr[a7] + arr[a8];
+void main() {
+    int i = 0;
+    while (i < 10) {
+        if (i % 2 == 0) {
+            x = x + i;
+        } else {
+            y[i] = x * i;
+        }
+        i = i + 1;
+    }
+    return;
 }
-
-int main()
-{
-    int q = 1, r = 2, s = 04, t = 0x7, u = 0xA, v = 0xb, w = 0xcD, x = 077;
-
-    int sum1 = q + r + s + t + u + v + w + x;
-
-    int sum2 = array();
-
-    int sum3 = sum1 + sum2;
-
-    return 0;
+const int a = 10;const int b = 20;const int arr[2] = {1, 2};int x = 5;int y[10];int z = {1, 2, 3};
+int sum(int x, int y) {
+    return x + y;
+}
+void test() {
+    int result = sum(a, b);
+    if (result > 10) {
+        result = result - 10;
+    } else if (result < 20) {
+        result = result + 10;
+    }
+    return;
+}
+int factorial(int n) {
+    if (n <= 1) {
+        return 1;
+    } else {
+        return n * factorial(n - 1);
+    }
+}
+void calculate() {
+    int num = 5;
+    int fact = factorial(num);
+    while (count < max) {
+        count = count + 1;
+    }
+    return;
 }

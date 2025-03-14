@@ -16,7 +16,7 @@ public class Main {
         CharStream input = CharStreams.fromFileName(source);
 
         CommonTokenStream tokens = lexerAnalysis(input);
-        ParseTree tree = parserAnalysis(tokens);
+//        ParseTree tree = parserAnalysis(tokens);
 
     }
 
@@ -37,7 +37,7 @@ public class Main {
         }
         else
         {
-            FormatterVisitor formatter = new FormatterVisitor();
+            parserVisitor formatter = new parserVisitor();
             String formattedCode = formatter.visit(tree);
             System.out.println(formattedCode);
             //shan
@@ -93,7 +93,7 @@ public class Main {
             "            while (3)\n" +
             "                ;\n" +
             "    return;\n" +
-            "}\n";
+            "}";
         return result.equals(exp);
     }
 

@@ -1,5 +1,8 @@
 int main()
 {
-    int a=0X11;
-    return -a;
+   // line comment
+   /*
+     block comment
+   */
+   int i = 0x1;
 }

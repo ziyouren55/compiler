@@ -428,7 +428,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
         }
         else
         {
-            result.append("PrimaryExp miss");
+            result.append("PrimaryExp miss\nPrimaryExp miss\nPrimaryExp miss\n");
         }
 
         return result.toString();

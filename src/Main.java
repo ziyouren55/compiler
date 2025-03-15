@@ -43,7 +43,7 @@ public class Main {
             String formattedCode = formatter.visit(tree);
             System.out.println(formattedCode);
             //shan
-            //System.out.println(check(formattedCode));
+//            System.out.println(check(formattedCode));
         }
         return tree;
     }
@@ -100,57 +100,59 @@ public class Main {
 
     public static boolean check(String result)
     {
-        String exp = "void main() {\n" +
-            "    int i = 0;\n" +
-            "    while (i < 10) {\n" +
-            "        if (i % 2 == 0) {\n" +
-            "            x = x + i;\n" +
+        String exp = "const int globalArray[2][3] = {{1 + 2, 3 * 4, 5 / 6}, {7 - 8, 9 % 10, 0}};\n" +
+            "\n" +
+            "int add(int a, int b) {\n" +
+            "    return a + b;\n" +
+            "}\n" +
+            "\n" +
+            "void process(int x) {\n" +
+            "    int arr[3] = {x, x * 2, x + 3};\n" +
+            "    if (arr[0] > 0) {\n" +
+            "        while (arr[1] < 100) {\n" +
+            "            arr[1] = arr[1] * 2;\n" +
+            "            if (arr[1] > 50) {\n" +
+            "                break;\n" +
+            "            }\n" +
             "        }\n" +
-            "        else {\n" +
-            "            y[i] = x * i;\n" +
-            "        }\n" +
-            "        i = i + 1;\n" +
-            "    }\n" +
-            "    return;\n" +
-            "}\n" +
-            "const int a = 10;\n" +
-            "const int b = 20;\n" +
-            "const int arr[2] = {1, 2};\n" +
-            "int x = 5;\n" +
-            "int y[10];\n" +
-            "int z = {1, 2, 3};\n" +
-            "\n" +
-            "int sum(int x, int y) {\n" +
-            "    return x + y;\n" +
-            "}\n" +
-            "\n" +
-            "void test() {\n" +
-            "    int result = sum(a, b);\n" +
-            "    if (result > 10) {\n" +
-            "        result = result - 10;\n" +
-            "    }\n" +
-            "    else if (result < 20) {\n" +
-            "        result = result + 10;\n" +
-            "    }\n" +
-            "    return;\n" +
-            "}\n" +
-            "\n" +
-            "int factorial(int n) {\n" +
-            "    if (n <= 1) {\n" +
-            "        return 1;\n" +
             "    }\n" +
             "    else {\n" +
-            "        return n * factorial(n - 1);\n" +
+            "        arr[2] = arr[2] - 1;\n" +
             "    }\n" +
             "}\n" +
             "\n" +
-            "void calculate() {\n" +
-            "    int num = 5;\n" +
-            "    int fact = factorial(num);\n" +
-            "    while (count < max) {\n" +
-            "        count = count + 1;\n" +
+            "int complexExp(int a, int b) {\n" +
+            "    int c = (a + b) * (a - b) % 10;\n" +
+            "    return c * d + a / (b + 1);\n" +
+            "}\n" +
+            "\n" +
+            "int main() {\n" +
+            "    int a = 10;\n" +
+            "    int b = 20;\n" +
+            "    int result[5];\n" +
+            "\n" +
+            "    if (a > 0) {\n" +
+            "        if (b < 30) {\n" +
+            "            result[0] = add(a, b);\n" +
+            "        }\n" +
+            "        else {\n" +
+            "            result[0] = complexExp(a, b);\n" +
+            "        }\n" +
             "    }\n" +
-            "    return;\n" +
+            "    else {\n" +
+            "        result[0] = 0;\n" +
+            "    }\n" +
+            "\n" +
+            "    while (a < 100) {\n" +
+            "        a = a * 2;\n" +
+            "        if (a % 3 == 0) {\n" +
+            "            continue;\n" +
+            "        }\n" +
+            "        result[1] = result[1] + a;\n" +
+            "    }\n" +
+            "\n" +
+            "    process(result[0]);\n" +
+            "    return result[0] + result[1];\n" +
             "}";
         return result.equals(exp);
     }

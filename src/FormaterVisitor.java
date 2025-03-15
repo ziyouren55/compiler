@@ -362,7 +362,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
         }
         else if (ctx.getText().startsWith("break") || ctx.getText().startsWith("continue"))
         {
-            return visit(ctx.getChild(0)) + ";";
+            return ctx.getChild(0).getText() + ";";
         }
         else if (ctx.lVal() != null)
         {

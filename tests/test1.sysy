@@ -1,40 +1,51 @@
-void main() {
-    int i = 0;
-    while (i < 10) {
-        if (i % 2 == 0) {
-            x = x + i;
-        } else {
-            y[i] = x * i;
+const int globalArray[2][3] = {{1 + 2, 3 * 4, 5 / 6}, {7 - 8, 9 % 10, 0}};
+
+int add(int a, int b) {
+    return a + b;
+}
+
+void process(int x) {
+    int arr[3] = {x, x * 2, x + 3};
+    if (arr[0] > 0) {
+        while (arr[1] < 100) {
+            arr[1] = arr[1] * 2;
+            if (arr[1] > 50) {
+                break;
+            }
         }
-        i = i + 1;
     }
-    return;
-}
-const int a = 10;const int b = 20;const int arr[2] = {1, 2};int x = 5;int y[10];int z = {1, 2, 3};
-int sum(int x, int y) {
-    return x + y;
-}
-void test() {
-    int result = sum(a, b);
-    if (result > 10) {
-        result = result - 10;
-    } else if (result < 20) {
-        result = result + 10;
-    }
-    return;
-}
-int factorial(int n) {
-    if (n <= 1) {
-        return 1;
-    } else {
-        return n * factorial(n - 1);
+    else {
+        arr[2] = arr[2] - 1;
     }
 }
-void calculate() {
-    int num = 5;
-    int fact = factorial(num);
-    while (count < max) {
-        count = count + 1;
+
+int complexExp(int a, int b) {
+    int c = (a + b) * (a - b) % 10;
+    return c * d + a / (b + 1);
+}
+
+int main() {
+    int a = 10;
+    int b = 20;
+    int result[5];
+    if (a > 0) {
+        if (b < 30) {
+            result[0] = add(a, b);
+        }
+        else {
+            result[0] = complexExp(a, b);
+        }
     }
-    return;
+    else {
+        result[0] = 0;
+    }
+    while (a < 100) {
+        a = a * 2;
+        if (a % 3 == 0) {
+            continue;
+        }
+        result[1] = result[1] + a;
+    }
+    process(result[0]);
+    return result[0] + result[1];
 }

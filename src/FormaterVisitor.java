@@ -22,6 +22,24 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
         return s.toString();
     }
 
+     // 入口：访问整个编译单元
+    @Override
+    public String visitCompUnit(SysYParser.CompUnitContext ctx) {
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            ParseTree child = ctx.getChild(i);
+            String childStr = visit(child);
+            if (childStr != null && !childStr.isEmpty()) {
+                sb.append(childStr.trim());
+
+                if (i < ctx.getChildCount() - 1) {
+                    sb.append("\n");
+                    if (ctx.getChild(i + 1) instanceof SysYParser.FuncDefContext)
+                        sb.append("\n");
+                }
+            }
+        }
+        return sb.toString().trim();
+    }
 
     @Override
     public String visitChildren(RuleNode node) {

@@ -500,7 +500,6 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             if (actualParams.size() != formalParams.size())
             {
                 outputHelper.printSemanticError(ErrorType.FUNC_PARAM_MISMATCH, ctx.getStart().getLine(), funcName);
-                return "error "+ ErrorType.FUNC_PARAM_MISMATCH.getErrorCode();
             }
             else
             {
@@ -510,7 +509,6 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
                     if (!actualParams.get(i).equals(formalParams.get(i)))
                     {
                         outputHelper.printSemanticError(ErrorType.FUNC_PARAM_MISMATCH, ctx.getStart().getLine(), funcName);
-                        return "error "+ErrorType.FUNC_PARAM_MISMATCH.getErrorCode();
                     }
                 }
             }

@@ -323,7 +323,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
         // 如果是 while 语句：形如 while (exp) stmt
         else if (ctx.getChild(0).getText().equals("while")) {
             // 访问 while 条件表达式
-            visit(ctx.exp());
+            visit(ctx.cond());
             // 访问 while 循环体
             visit(ctx.stmt(0));
 
@@ -417,7 +417,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
 
         if(varType instanceof IntType)
         {
-            if(ctx.getChild(1).getText().equals("["))
+            if(ctx.getChildCount()>1 && ctx.getChild(1).getText().equals("["))
                 outputHelper.printSemanticError(ErrorType.NON_ARRAY_SUBSCRIPT,
                     ctx.IDENT().getSymbol().getLine(),varName);
             return "int";
@@ -557,10 +557,10 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             // 获取操作符：该操作符位于子节点位置 2*i-1（因为解析树中交替排列：unaryExp, operator, unaryExp, operator, ...）
             String operator = ctx.getChild(2 * i - 1).getText();
             // 处理下一个操作数
-            visit(ctx.unaryExp(i));
+            String postType = visit(ctx.unaryExp(i));
             String postExp = ctx.unaryExp(i).getText();
             // 简单类型检查：假设乘法运算要求操作数均为 int
-            if (!curScope.find(prevExp).equals(curScope.find(postExp)) )
+            if (!type.equals(postType) )
             {
                 TerminalNode opNode = (TerminalNode) ctx.getChild(2 * i - 1);
                 // 如果类型不匹配，则报告错误：Invalid operator usage

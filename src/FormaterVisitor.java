@@ -10,6 +10,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
 {
     private OutputHelper outputHelper = new OutputHelper();
     private SymbolTable curScope = new SymbolTable(null);
+    private SymbolTable funcFParamsScope = null;
     private List<Type> paramsTyList = new ArrayList<>();
     private Type curFuncRetTy = null;
     private int indentLevel = 0;
@@ -77,6 +78,11 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             outputHelper.printSemanticError(ErrorType.REDEFINED_VAR, ctx.IDENT().getSymbol().getLine(), constName);
             return "error " + ErrorType.REDEFINED_VAR.getErrorCode();
         }
+        if(funcFParamsScope != null && funcFParamsScope.find(constName) != null)
+        {
+            outputHelper.printSemanticError(ErrorType.REDEFINED_VAR, ctx.IDENT().getSymbol().getLine(), constName);
+            return "error " + ErrorType.REDEFINED_VAR.getErrorCode();
+        }
 
         if(ctx.constExp() == null)
         {
@@ -141,16 +147,22 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
                     ctx.IDENT().getText());
             return "error "+ErrorType.REDEFINED_VAR.getErrorCode();
         }
+        if(funcFParamsScope != null && funcFParamsScope.find(varName) != null)
+        {
+            outputHelper.printSemanticError(ErrorType.REDEFINED_VAR, ctx.IDENT().getSymbol().getLine(),varName);
+            return "error " + ErrorType.REDEFINED_VAR.getErrorCode();
+        }
 
-        if (ctx.constExp() == null) {     //非数组
+        if (ctx.constExp().isEmpty()) {     //非数组
             curScope.put(varName, IntType.getI32());
         } else { // 数组
             ArrayType arrType = new ArrayType(IntType.getI32(),ctx.constExp().size());
             curScope.put(varName, arrType);
         }
         if (ctx.ASSIGN() != null) {     // 包含定义语句
-                visitInitVal(ctx.initVal()); // 访问定义语句右侧的表达式，如c=4右侧的4
-            }
+            String type = visitInitVal(ctx.initVal()); // 访问定义语句右侧的表达式，如c=4右侧的4
+
+        }
         return "";
     }
 
@@ -212,14 +224,18 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
         // 构造函数类型，存储返回类型和参数类型列表
         FunctionType functionType = new FunctionType(retType, paramsTyList);
 
-
+        funcFParamsScope = curScope;
         // 访问函数体（block），进行进一步的语义检查
         visit(ctx.block());
+
+        funcFParamsScope = null;
 
         curScope = curScope.getParent();
 
         // 将函数类型加入全局符号表
         curScope.put(funcName, functionType);
+
+        paramsTyList = new ArrayList<>();
 
         return "";
     }
@@ -512,11 +528,14 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
                     }
                 }
             }
+            paramsTyList = new ArrayList<>();
             // 这里可以进一步检查实际参数与形式参数是否匹配（本示例中省略）
             if(((FunctionType) funcType).getRetType() instanceof IntType)
             {
                 return "int";
             }
+            else if(((FunctionType) funcType).getRetType() instanceof VoidType)
+                return "void";
             return "func";
 
         }

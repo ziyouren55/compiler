@@ -72,4 +72,5 @@ class FunctionType extends Type {
     }
 
     public List<Type> getParamsType(){return paramsType;}
+    public Type getRetType(){return retType;}
 }

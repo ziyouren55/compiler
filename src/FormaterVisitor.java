@@ -78,7 +78,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             return "error " + ErrorType.REDEFINED_VAR.getErrorCode();
         }
 
-        if(ctx.constExp().isEmpty())
+        if(ctx.constExp() == null)
         {
             visit(ctx.constInitVal());
             curScope.put(constName,IntType.getI32());
@@ -142,15 +142,15 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             return "error "+ErrorType.REDEFINED_VAR.getErrorCode();
         }
 
-        if (ctx.constExp().isEmpty()) {     //非数组
-            if (ctx.ASSIGN() != null) {     // 包含定义语句
-                visitInitVal(ctx.initVal()); // 访问定义语句右侧的表达式，如c=4右侧的4
-            }
+        if (ctx.constExp() == null) {     //非数组
             curScope.put(varName, IntType.getI32());
         } else { // 数组
             ArrayType arrType = new ArrayType(IntType.getI32(),ctx.constExp().size());
             curScope.put(varName, arrType);
         }
+        if (ctx.ASSIGN() != null) {     // 包含定义语句
+                visitInitVal(ctx.initVal()); // 访问定义语句右侧的表达式，如c=4右侧的4
+            }
         return "";
     }
 
@@ -278,6 +278,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
     {
         curScope = new SymbolTable(curScope);
         for (SysYParser.BlockItemContext blockItem : ctx.blockItem()) {
+            String bis = blockItem.getText();
             visit(blockItem);
         }
         curScope = curScope.getParent();
@@ -488,6 +489,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
                 return "error "+ErrorType.VAR_USED_AS_FUNC.getErrorCode();
             }
             // 如果存在参数列表，处理函数调用的参数
+            paramsTyList = new ArrayList<>();
             if (ctx.funcRParams() != null)
             {
                 visit(ctx.funcRParams());
@@ -513,6 +515,10 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
                 }
             }
             // 这里可以进一步检查实际参数与形式参数是否匹配（本示例中省略）
+            if(((FunctionType) funcType).getRetType() instanceof IntType)
+            {
+                return "int";
+            }
             return "func";
 
         }
@@ -590,7 +596,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             // 访问右侧的乘法表达式
             String rightType = visit(ctx.mulExp(i));
             // 检查左右操作数是否均为 int 类型
-            if (!resultType.equals(rightType))
+            if (!resultType.equals(rightType) || !resultType.equals("int"))
             {
                 outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR, opNode.getSymbol().getLine(), opNode.getText());
                 return "error "+ErrorType.INVALID_OPERATOR.getErrorCode();

@@ -33,18 +33,20 @@ public class Main {
         // 调用语法分析的起始规则（例如 compUnit）
         ParseTree tree = sysYParser.compUnit();
 
+
         // 如果语法分析阶段有错误，则打印错误信息并退出
-        if (errorListener.hasErrors()) {
-            errorListener.printParserErrorInformation();
-        }
-        else
-        {
+//        if (errorListener.hasErrors()) {
+//            errorListener.printParserErrorInformation();
+//        }
+//        else
+//        {
             FormaterVisitor formatter = new FormaterVisitor();
             String formattedCode = formatter.visit(tree);
-            System.out.println(formattedCode);
+            if(formattedCode.equals("false"))
+                OutputHelper.printNoSemanticErrors();
             //shan
 //            System.out.println(check(formattedCode));
-        }
+//        }
         return tree;
     }
 

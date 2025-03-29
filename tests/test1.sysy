@@ -1,96 +1,52 @@
+// 函数定义部分
+
+int foo() {
+    return 10;
+}
+
+int foo() {   // Error type 4: Redefined function: foo
+    return 20;
+}
+
+int bar(int a) {  // 正确定义：参数个数为1，返回值为int
+    return a + 1;
+}
+
+int baz() {
+    int arr[2] = {0, 1};
+    return arr;  // Error type 7: Return type mismatch in function: baz
+}
+
+// 主函数中测试函数与变量的运算、调用和赋值
+
 int main() {
-    int i = 0;
-    while (i < 5) {
-        int j = 0;
-        while (j < i) {
-            int k = 0;
-            while (k < j) {
-                k = 1;
-            }
-            j = 1;
-        }
-        i = 1;
-    }
-    int number = 1234;
-    int sum = 0;
-    while (number != 0) {
-        sum = number % 10;
-        number = 10;
-        break;
-    }
-    int m = 0;
-    while (m < sum) {
-        int n = 0;
-        while (n < m) {
-            n = 1;
-            break;
-            continue;
-        }
-        m = 6;
-    }
-    if (a == 0)
-        return;
-    else if (b != 0)
-        return 0;
-    else
-        a = 0;
-    if (a == 1) {
-        a = 1;
-    }
-    else if (d <= 3) {
-        return;
-    }
-    else {
-        a = 4;
-    }
-    while (1 == 1)
-        return;
-    if (a == 1)
-        if (b == 1)
-            if (c == 1)
-                c = 0;
-    while (a == 0)
-        while (b == 0)
-            while (c == 0)
-                return +0x40;
-    while (a == 0)
-        if (a == 0)
-            while (c == 0)
-                return 1;
-        else {
-            a = 9;
-        }
-    while (a == 1) {
-        while (b == 1) {
-            while (9 == 0) {
-                a = 0;
-            }
-        }
-    }
-    {
-        a = 0;
-    }
-    ;
-    {
-    }
-    if (a == 0) {
-        a = 0;
-    }
-    else {
-        d = 0;
-    }
-    if (a == 0) {
-        while (1 == 0) {
-            return 0;
-        }
-    }
-    else
-        while (a == 01) {
-            return 0;
-        }
-    if (a == 0)
-        while (a == 0) {
-            return 0;
-        }
-    ;
+    int result;
+
+    // 错误：调用 foo 时传入参数，实际 foo 无参数定义
+    result = foo(1);  // Error type 8: Function parameter mismatch: foo
+
+    // 正确调用 foo（返回值为 int）
+    result = foo();
+
+    // 错误：尝试对函数进行算术运算，将函数名当作变量参与运算
+    result = foo + 5;  // Error type 6: Invalid operator usage (函数与整数相加)
+
+    // 错误：将函数 bar 当作变量进行运算
+    result = result + bar;  // Error type 6: Invalid operator usage (变量与函数相加)
+
+    // 错误：将函数调用表达式作为赋值目标
+    foo = 5;  // Error type 11: Assignment to non-variable or array element
+
+    // 错误：将一个整数变量当作函数进行调用
+    int temp = result;
+    temp = temp(10);  // Error type 10: Variable used as a function
+
+    // 错误：尝试将函数直接赋值给变量（函数不是一个变量值）
+    int funcVar;
+    funcVar = foo;  // Error type 6: Invalid operator usage (赋值中混入函数)
+
+    // 正确调用 bar，但传入的参数不匹配预期时也会触发错误
+    result = bar();  // Error type 8: Function parameter mismatch: bar
+
+    return result;
 }

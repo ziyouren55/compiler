@@ -512,6 +512,10 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             {
                 visit(ctx.funcRParams());
             }
+            else
+            {
+                paramsStack.push(new ArrayList<>());
+            }
             List<Type> formalParams = ((FunctionType) funcType).getParamsType();
             List<Type> actualParams = paramsStack.pop();
 

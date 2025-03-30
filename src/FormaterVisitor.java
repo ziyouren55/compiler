@@ -365,8 +365,8 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
 
             if(!lValTY.equals(expTY) && !(lValTY.startsWith("error") || expTY.startsWith("error")))
             {
-                outputHelper.printSemanticError(ErrorType.MISMATCH_ASSIGN,
-                    ctx.ASSIGN().getSymbol().getLine(),"missMatch");
+//                outputHelper.printSemanticError(ErrorType.MISMATCH_ASSIGN,
+//                    ctx.ASSIGN().getSymbol().getLine(),"missMatch");
                 return "error "+ErrorType.MISMATCH_ASSIGN.getErrorCode();
             }
         }

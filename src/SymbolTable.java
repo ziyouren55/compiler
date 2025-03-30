@@ -9,6 +9,16 @@ class SymbolTable {
         this.parent = parent;
     }
 
+    // 合并另一个 SymbolTable 的 map 到本对象中
+    public void merge(SymbolTable other) {
+        if (other != null && other.table != null) {
+            // putAll 会把 other.table 中的所有键值对加入到当前 table 中
+            // 如果存在相同的 key，则当前 table 中的值会被覆盖
+            this.table.putAll(other.table);
+        }
+    }
+
+
     public void put(String name, Type type) {
         table.put(name, type);
     }

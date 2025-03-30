@@ -500,21 +500,21 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             List<Type> formalParams = ((FunctionType) funcType).getParamsType();
             List<Type> actualParams = paramsTyList;
 
-//            if (actualParams.size() != formalParams.size())
-//            {
-//                outputHelper.printSemanticError(ErrorType.FUNC_PARAM_MISMATCH, ctx.getStart().getLine(), funcName);
-//            }
-//            else
-//            {
-//                // 逐个比较参数类型
-//                for (int i = 0; i < actualParams.size(); i++)
-//                {
-//                    if (!actualParams.get(i).equals(formalParams.get(i)))
-//                    {
-//                        outputHelper.printSemanticError(ErrorType.FUNC_PARAM_MISMATCH, ctx.getStart().getLine(), funcName);
-//                    }
-//                }
-//            }
+            if (actualParams.size() != formalParams.size())
+            {
+                outputHelper.printSemanticError(ErrorType.FUNC_PARAM_MISMATCH, ctx.getStart().getLine(), funcName);
+            }
+            else
+            {
+                // 逐个比较参数类型
+                for (int i = 0; i < actualParams.size(); i++)
+                {
+                    if (!actualParams.get(i).equals(formalParams.get(i)))
+                    {
+                        outputHelper.printSemanticError(ErrorType.FUNC_PARAM_MISMATCH, ctx.getStart().getLine(), funcName);
+                    }
+                }
+            }
             paramsTyList = new ArrayList<>();
             // 这里可以进一步检查实际参数与形式参数是否匹配（本示例中省略）
             if(((FunctionType) funcType).getRetType() instanceof IntType)

@@ -1,86 +1,12 @@
-// 递归函数：计算斐波那契数
-int fib(int n) {
-    if (n <= 1)
-        return n;
-    else
-        return fib(n - 1) + fib(n - 2);
+int mul(int a, int b) {
+    return a * b;
 }
 
-// 函数：计算一维数组的和，要求传入的数组至少有5个元素（类型检查只关注维数，不检查具体大小）
-int sumArray(int arr[5], int n) {
-    int i, sum;
-    sum = 0;
-    i = 0;
-    while (i < n) {
-        sum = sum + arr[i];
-        i = i + 1;
-    }
-    return sum;
-}
-
-// 函数：计算二维数组中某一行的和，二维数组视为类型匹配即可，不检查每行长度
-int computeRowSum(int matrix[3][3], int row) {
-    int j, sum;
-    sum = 0;
-    j = 0;
-    while (j < 3) {
-        sum = sum + matrix[row][j];
-        j = j + 1;
-    }
-    return sum;
-}
-
-// 函数：演示参数与局部变量遮蔽问题
-int process(int a, int b) {
-    int res;
-    // 外层的 a 为函数参数
-    res = a + b;
-    {
-        // 内层块中定义一个新的 a，与外层参数同名，形成遮蔽（合法）
-        int a;
-        a = b + 10;    // 内层 a 初始化为 b+10
-        res = res + a; // 此处使用内层的 a
-    }
-    // 退出内层块后，再次使用外层参数 a
-    res = res + a;     // 此处 a 为函数参数
-    // 利用递归调用
-    res = res + fib(a);
-    return res;
+int add(int a, int b) {
+    return a + b;
 }
 
 int main() {
-    int result;
-    int arr[5];          // 一维数组
-    int matrix[3][3];    // 二维数组
-    int i, j;
-
-    // 初始化一维数组
-    i = 0;
-    while (i < 5) {
-        arr[i] = i * 2;
-        i = i + 1;
-    }
-
-    // 初始化二维数组
-    i = 0;
-    while (i < 3) {
-        j = 0;
-        while (j < 3) {
-            matrix[i][j] = i + j;
-            j = j + 1;
-        }
-        i = i + 1;
-    }
-
-    // 正确调用：sumArray 与 fib 均正确
-    result = sumArray(arr, 5);
-    result = result + fib(5);
-
-    // 正确调用：二维数组传递到 computeRowSum 中
-    result = result + computeRowSum(matrix, 1);
-
-    // 正确调用：process 内部演示了参数遮蔽与递归调用
-    result = result + process(3, 7);
-
+    int result = mul(add(2, 3), add(4, 5)); // add(2,3) 和 add(4,5) 均返回 int，传入 mul 中匹配正确
     return result;
 }

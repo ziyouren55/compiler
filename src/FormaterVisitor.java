@@ -575,8 +575,8 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
                 TerminalNode opNode = (TerminalNode) ctx.getChild(2 * i - 1);
                 // 如果类型不匹配，则报告错误：Invalid operator usage
                 // 这里假设 ctx.getChild(2*i-1) 为包含操作符的节点，其行号作为错误行号
-                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR,
-                    opNode.getSymbol().getLine(), operator);
+//                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR,
+//                    opNode.getSymbol().getLine(), operator);
                 return "error "+ ErrorType.INVALID_OPERATOR.getErrorCode();
             }
 
@@ -602,7 +602,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             // 检查左右操作数是否均为 int 类型
             if (!resultType.equals(rightType) || !resultType.equals("int"))
             {
-                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR, opNode.getSymbol().getLine(), opNode.getText());
+//                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR, opNode.getSymbol().getLine(), opNode.getText());
                 return "error "+ErrorType.INVALID_OPERATOR.getErrorCode();
 
             }

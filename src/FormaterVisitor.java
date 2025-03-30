@@ -10,6 +10,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
 {
     private OutputHelper outputHelper = new OutputHelper();
     private SymbolTable curScope = new SymbolTable(null);
+    private SymbolTable globalScope;
     private SymbolTable funcFParamsScope = null;
     private List<Type> paramsTyList = new ArrayList<>();
     private Type curFuncRetTy = null;
@@ -33,7 +34,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
     public String visitCompUnit(SysYParser.CompUnitContext ctx)
     {
         // 假设 compUnit 由若干 Decl 和 FuncDef 组成
-        SymbolTable globalScope = new SymbolTable(null);
+        globalScope = new SymbolTable(null);
         curScope = globalScope;
 
         // 遍历所有的声明（变量、常量等）
@@ -214,13 +215,12 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
         // 构造函数类型，存储返回类型和参数类型列表
         FunctionType functionType = new FunctionType(retType, paramsTyList);
 
+        globalScope.put(funcName,functionType);
+
         // 访问函数体（block），进行进一步的语义检查
         visit(ctx.block());
 
         curScope = curScope.getParent();
-
-        // 将函数类型加入全局符号表
-        curScope.put(funcName, functionType);
 
         paramsTyList = new ArrayList<>();
 
@@ -345,8 +345,8 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             }
             if(!retTY.equals(curFuncRetTy))
             {
-//                outputHelper.printSemanticError(ErrorType.FUNC_RETURN_TYPE_MISMATCH,
-//                    ctx.SEMICOLON().getSymbol().getLine(),"return type error");
+                outputHelper.printSemanticError(ErrorType.FUNC_RETURN_TYPE_MISMATCH,
+                    ctx.SEMICOLON().getSymbol().getLine(),"return type error");
                 return "error "+ErrorType.FUNC_RETURN_TYPE_MISMATCH.getErrorCode();
             }
 
@@ -481,8 +481,8 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             Type funcType = curScope.find(funcName);
             if (funcType == null)
             {
-//                outputHelper.printSemanticError(ErrorType.UNDEFINED_FUNC,
-//                    ctx.IDENT().getSymbol().getLine(), funcName);
+                outputHelper.printSemanticError(ErrorType.UNDEFINED_FUNC,
+                    ctx.IDENT().getSymbol().getLine(), funcName);
                 return "error "+ErrorType.UNDEFINED_FUNC.getErrorCode();
             }
             if (!(funcType instanceof FunctionType))
@@ -500,21 +500,21 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             List<Type> formalParams = ((FunctionType) funcType).getParamsType();
             List<Type> actualParams = paramsTyList;
 
-//            if (actualParams.size() != formalParams.size())
-//            {
-//                outputHelper.printSemanticError(ErrorType.FUNC_PARAM_MISMATCH, ctx.getStart().getLine(), funcName);
-//            }
-//            else
-//            {
-//                // 逐个比较参数类型
-//                for (int i = 0; i < actualParams.size(); i++)
-//                {
-//                    if (!actualParams.get(i).equals(formalParams.get(i)))
-//                    {
-//                        outputHelper.printSemanticError(ErrorType.FUNC_PARAM_MISMATCH, ctx.getStart().getLine(), funcName);
-//                    }
-//                }
-//            }
+            if (actualParams.size() != formalParams.size())
+            {
+                outputHelper.printSemanticError(ErrorType.FUNC_PARAM_MISMATCH, ctx.getStart().getLine(), funcName);
+            }
+            else
+            {
+                // 逐个比较参数类型
+                for (int i = 0; i < actualParams.size(); i++)
+                {
+                    if (!actualParams.get(i).equals(formalParams.get(i)))
+                    {
+                        outputHelper.printSemanticError(ErrorType.FUNC_PARAM_MISMATCH, ctx.getStart().getLine(), funcName);
+                    }
+                }
+            }
             paramsTyList = new ArrayList<>();
             // 这里可以进一步检查实际参数与形式参数是否匹配（本示例中省略）
             if(((FunctionType) funcType).getRetType() instanceof IntType)

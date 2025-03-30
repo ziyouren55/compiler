@@ -1,12 +1,13 @@
-int mul(int a, int b) {
-    return a * b;
+// 示例1：返回数组而非 int
+int returnArray() {
+    int arr[3] = {1, 2, 3};
+    int a = 1;
+    // 错误：函数声明为返回 int，但返回了一个数组
+    return -a;  // Error type 7: Return type mismatch in function: returnArray
 }
 
-int add(int a, int b) {
-    return a + b;
+void dfg(){
+  int a;
+  return dfg;
 }
 
-int main() {
-    int result = mul(add(2, 3), add(4, 5)); // add(2,3) 和 add(4,5) 均返回 int，传入 mul 中匹配正确
-    return result;
-}

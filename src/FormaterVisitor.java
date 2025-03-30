@@ -364,6 +364,12 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
                     ctx.SEMICOLON().getSymbol().getLine(),"return type error");
                 return "error "+ErrorType.FUNC_RETURN_TYPE_MISMATCH.getErrorCode();
             }
+            if(ctx.exp() != null && curFuncRetTy.equals(VoidType.getVoidType()))
+            {
+                outputHelper.printSemanticError(ErrorType.FUNC_RETURN_TYPE_MISMATCH,
+                    ctx.SEMICOLON().getSymbol().getLine(),"return type error");
+                return "error "+ErrorType.FUNC_RETURN_TYPE_MISMATCH.getErrorCode();
+            }
 
         }
         else if(ctx.lVal() != null)

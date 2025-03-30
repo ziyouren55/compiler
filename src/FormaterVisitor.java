@@ -358,8 +358,8 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
 
             if(lValTY.equals("func"))
             {
-                outputHelper.printSemanticError(ErrorType.ASSIGN_TO_NON_VAR,
-                    ctx.ASSIGN().getSymbol().getLine(),ctx.lVal().getText());
+//                outputHelper.printSemanticError(ErrorType.ASSIGN_TO_NON_VAR,
+//                    ctx.ASSIGN().getSymbol().getLine(),ctx.lVal().getText());
                 return "error "+ErrorType.ASSIGN_TO_NON_VAR.getErrorCode();
             }
 

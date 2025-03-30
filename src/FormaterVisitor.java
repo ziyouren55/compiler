@@ -5,6 +5,7 @@ import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Stack;
 
 public class FormaterVisitor extends SysYParserBaseVisitor<String>
 {
@@ -12,6 +13,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
     private SymbolTable curScope = new SymbolTable(null);
     private SymbolTable globalScope;
     private SymbolTable funcFParamsScope = null;
+    Stack<List<Type>> paramsStack = new Stack<>();
     private List<Type> paramsTyList = new ArrayList<>();
     private Type curFuncRetTy = null;
     private int indentLevel = 0;
@@ -206,14 +208,17 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
 
         curScope = new SymbolTable(curScope);
 
-        paramsTyList = new ArrayList<>();
         if (ctx.funcFParams() != null) {
             // 假设 processFuncFParams 是一个将函数形参解析为 List<Type> 的辅助方法
             visit(ctx.funcFParams());
         }
+        else
+        {
+            paramsStack.push(new ArrayList<>());
+        }
 
         // 构造函数类型，存储返回类型和参数类型列表
-        FunctionType functionType = new FunctionType(retType, paramsTyList);
+        FunctionType functionType = new FunctionType(retType, paramsStack.peek());
 
         globalScope.put(funcName,functionType);
 
@@ -222,7 +227,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
 
         curScope = curScope.getParent();
 
-        paramsTyList = new ArrayList<>();
+        paramsStack.pop();
 
         return "";
     }
@@ -231,13 +236,20 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
     @Override
     public String visitFuncFParams(SysYParser.FuncFParamsContext ctx)
     {
-        paramsTyList = new ArrayList<>();
+        List<Type> curParamsTy = new ArrayList<>();
 
         // 遍历所有的形参
         for (SysYParser.FuncFParamContext paramCtx : ctx.funcFParam()) {
-            visitFuncFParam(paramCtx);
+            String param = visitFuncFParam(paramCtx);
+            if(param.equals("int"))
+                curParamsTy.add(IntType.getI32());
+            else if(param.startsWith("arr"))
+            {
+                curParamsTy.add(new ArrayType(IntType.getI32(),Integer.parseInt(param.substring(3))));
+            }
         }
 
+        paramsStack.push(curParamsTy);
         return "";
     }
 
@@ -270,8 +282,11 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
         // 将形参添加到当前作用域中
         curScope.put(paramName, paramType);
         // 将形参类型添加到参数列表中，供构造函数类型使用
-        paramsTyList.add(paramType);
 
+        if(paramType instanceof IntType)
+            return "int";
+        else if(paramType != null)
+            return "arr"+((ArrayType) paramType).getNumElements();
         return "";
     }
 
@@ -492,30 +507,29 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
                 return "error "+ErrorType.VAR_USED_AS_FUNC.getErrorCode();
             }
             // 如果存在参数列表，处理函数调用的参数
-            paramsTyList = new ArrayList<>();
+
             if (ctx.funcRParams() != null)
             {
                 visit(ctx.funcRParams());
             }
             List<Type> formalParams = ((FunctionType) funcType).getParamsType();
-            List<Type> actualParams = paramsTyList;
+            List<Type> actualParams = paramsStack.pop();
 
-//            if (actualParams.size() != formalParams.size())
-//            {
-//                outputHelper.printSemanticError(ErrorType.FUNC_PARAM_MISMATCH, ctx.getStart().getLine(), funcName);
-//            }
-//            else
-//            {
-//                // 逐个比较参数类型
-//                for (int i = 0; i < actualParams.size(); i++)
-//                {
-//                    if (!actualParams.get(i).equals(formalParams.get(i)))
-//                    {
-//                        outputHelper.printSemanticError(ErrorType.FUNC_PARAM_MISMATCH, ctx.getStart().getLine(), funcName);
-//                    }
-//                }
-//            }
-            paramsTyList = new ArrayList<>();
+            if (actualParams.size() != formalParams.size())
+            {
+                outputHelper.printSemanticError(ErrorType.FUNC_PARAM_MISMATCH, ctx.getStart().getLine(), funcName);
+            }
+            else
+            {
+                // 逐个比较参数类型
+                for (int i = 0; i < actualParams.size(); i++)
+                {
+                    if (!actualParams.get(i).equals(formalParams.get(i)))
+                    {
+                        outputHelper.printSemanticError(ErrorType.FUNC_PARAM_MISMATCH, ctx.getStart().getLine(), funcName);
+                    }
+                }
+            }
             // 这里可以进一步检查实际参数与形式参数是否匹配（本示例中省略）
             if(((FunctionType) funcType).getRetType() instanceof IntType)
             {
@@ -539,17 +553,20 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
     @Override
     public String visitFuncRParams(SysYParser.FuncRParamsContext ctx)
     {
-        paramsTyList = new ArrayList<>();
+        String text = ctx.getText();
+        List<Type> paramsList = new ArrayList<>();
         for (SysYParser.ExpContext expCtx : ctx.exp()) {
+            String expCtxStr = expCtx.getText();
             String type =  visit(expCtx);
             if(type.equals("int"))
-                paramsTyList.add(IntType.getI32());
+                paramsList.add(IntType.getI32());
             else if(type.startsWith("arr"))
             {
                 int dim = Integer.parseInt(type.substring(3));
-                paramsTyList.add(new ArrayType(IntType.getI32(),dim));
+                paramsList.add(new ArrayType(IntType.getI32(),dim));
             }
         }
+        paramsStack.push(paramsList);
         return "";
     }
 

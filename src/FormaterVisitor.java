@@ -182,9 +182,9 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
 
         // 检查当前作用域中是否已存在该函数（重定义错误）
         if (curScope.localFind(funcName) != null) {
-            outputHelper.printSemanticError(ErrorType.REDEFINED_FUNC,
-                ctx.IDENT().getSymbol().getLine(),
-                "Redefined function: " + funcName);
+//            outputHelper.printSemanticError(ErrorType.REDEFINED_FUNC,
+//                ctx.IDENT().getSymbol().getLine(),
+//                "Redefined function: " + funcName);
             return "error "+ErrorType.REDEFINED_FUNC.getErrorCode();
 
         }

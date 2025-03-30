@@ -481,8 +481,8 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             Type funcType = curScope.find(funcName);
             if (funcType == null)
             {
-                outputHelper.printSemanticError(ErrorType.UNDEFINED_FUNC,
-                    ctx.IDENT().getSymbol().getLine(), funcName);
+//                outputHelper.printSemanticError(ErrorType.UNDEFINED_FUNC,
+//                    ctx.IDENT().getSymbol().getLine(), funcName);
                 return "error "+ErrorType.UNDEFINED_FUNC.getErrorCode();
             }
             if (!(funcType instanceof FunctionType))

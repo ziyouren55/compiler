@@ -487,8 +487,8 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             }
             if (!(funcType instanceof FunctionType))
             {
-                outputHelper.printSemanticError(ErrorType.VAR_USED_AS_FUNC,
-                    ctx.IDENT().getSymbol().getLine(), funcName);
+//                outputHelper.printSemanticError(ErrorType.VAR_USED_AS_FUNC,
+//                    ctx.IDENT().getSymbol().getLine(), funcName);
                 return "error "+ErrorType.VAR_USED_AS_FUNC.getErrorCode();
             }
             // 如果存在参数列表，处理函数调用的参数

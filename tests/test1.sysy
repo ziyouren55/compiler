@@ -1,8 +1,55 @@
-int process(int arr[3]) { return arr[0]; }
+// 正确的函数定义：要求两个int参数，返回它们的和
+int add(int a, int b) {
+    return a + b;
+}
+
+// 错误示例1：函数参数重定义，重复定义了参数 x
+// 应触发 Error type 3: Redefined variable: x
+int duplicateParam(int x, int x) {
+    return x;
+}
+
+// 正确的函数定义：带有数组参数，要求传入一个一维数组（文档说明数组至少包含3个元素）和一个int
+int arrayFunc(int arr[3], int n) {
+    // 这里只对数组第一元素求值作为示例
+    return arr[0] + n;
+}
+
+// 错误示例2：返回值类型不匹配，返回数组而非int
+// 应触发 Error type 7: Return type mismatch in function: wrongReturn
+int wrongReturn(int a, int b) {
+    int tmp[2] = {a, b};
+    return tmp;
+}
+
 int main() {
-    int matrix[2][3];
-    // 将二维数组中的一维子数组传入是合法的，但如果传入整个二维数组则会出错：
-    process(matrix);       // 错误：matrix 是二维数组，不是一维数组
-    process(matrix[0]);      // 正确：matrix[0] 是一维数组
-    return 0;
+    int result;
+    int arr[3] = {1, 2, 3};
+    int matrix[2][3];  // 定义一个二维数组
+
+    // 正确调用：参数数量和类型都匹配
+    result = add(5, 10);
+
+    // 错误调用3：参数数量不匹配，少传一个参数
+    result = add(5);   // Error type 8: Function parameter mismatch: add
+
+    // 错误调用4：参数类型不匹配，传入一个数组（应为int）作为第一个参数
+    result = add(arr, 7);   // Error type 8: Function parameter mismatch: add
+
+    // 正确调用：数组参数与基本类型参数匹配
+    result = arrayFunc(arr, 3);
+
+    // 错误调用5：数组维数不匹配，函数要求传入一维数组，但传入二维数组变量
+    result = arrayFunc(matrix, 3);   // Error type 8: Function parameter mismatch: arrayFunc
+
+    // 错误调用6：将函数名作为实参传入（把函数当作int值使用）
+    result = add(add, 10);   // Error type 8: Function parameter mismatch: add
+
+    // 调用 duplicateParam 时参数数量和类型上看似匹配，但定义中参数重复，已触发 Error type 3
+    result = duplicateParam(1, 2);
+
+    // 调用错误返回类型函数，wrongReturn 内部返回数组导致返回类型不匹配
+    result = wrongReturn(3, 4);  // Error type 7: Return type mismatch in function: wrongReturn
+
+    return result;
 }

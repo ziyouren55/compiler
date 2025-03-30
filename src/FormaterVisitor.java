@@ -78,11 +78,6 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             outputHelper.printSemanticError(ErrorType.REDEFINED_VAR, ctx.IDENT().getSymbol().getLine(), constName);
             return "error " + ErrorType.REDEFINED_VAR.getErrorCode();
         }
-        if(funcFParamsScope != null && funcFParamsScope.find(constName) != null)
-        {
-            outputHelper.printSemanticError(ErrorType.REDEFINED_VAR, ctx.IDENT().getSymbol().getLine(), constName);
-            return "error " + ErrorType.REDEFINED_VAR.getErrorCode();
-        }
 
         if(ctx.constExp() == null)
         {
@@ -146,11 +141,6 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             outputHelper.printSemanticError(ErrorType.REDEFINED_VAR, ctx.IDENT().getSymbol().getLine(),
                     ctx.IDENT().getText());
             return "error "+ErrorType.REDEFINED_VAR.getErrorCode();
-        }
-        if(funcFParamsScope != null && funcFParamsScope.find(varName) != null)
-        {
-            outputHelper.printSemanticError(ErrorType.REDEFINED_VAR, ctx.IDENT().getSymbol().getLine(),varName);
-            return "error " + ErrorType.REDEFINED_VAR.getErrorCode();
         }
 
         if (ctx.constExp().isEmpty()) {     //非数组
@@ -224,11 +214,8 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
         // 构造函数类型，存储返回类型和参数类型列表
         FunctionType functionType = new FunctionType(retType, paramsTyList);
 
-        funcFParamsScope = curScope;
         // 访问函数体（block），进行进一步的语义检查
         visit(ctx.block());
-
-        funcFParamsScope = null;
 
         curScope = curScope.getParent();
 
@@ -292,12 +279,10 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
     @Override
     public String visitBlock(SysYParser.BlockContext ctx)
     {
-        curScope = new SymbolTable(curScope);
         for (SysYParser.BlockItemContext blockItem : ctx.blockItem()) {
             String bis = blockItem.getText();
             visit(blockItem);
         }
-        curScope = curScope.getParent();
 
         return "";
     }
@@ -323,7 +308,9 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
     {
          // 如果是块语句，直接调用 visitBlock 处理
         if (ctx.block() != null) {
+            curScope = new SymbolTable(curScope);
             visit(ctx.block());
+            curScope = curScope.getParent();
         }
         // 如果是 if 语句：形如 if (exp) stmt [else stmt]
         else if (ctx.getChild(0).getText().equals("if")) {

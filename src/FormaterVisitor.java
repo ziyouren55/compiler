@@ -345,8 +345,8 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             }
             if(!retTY.equals(curFuncRetTy))
             {
-                outputHelper.printSemanticError(ErrorType.FUNC_RETURN_TYPE_MISMATCH,
-                    ctx.SEMICOLON().getSymbol().getLine(),"return type error");
+//                outputHelper.printSemanticError(ErrorType.FUNC_RETURN_TYPE_MISMATCH,
+//                    ctx.SEMICOLON().getSymbol().getLine(),"return type error");
                 return "error "+ErrorType.FUNC_RETURN_TYPE_MISMATCH.getErrorCode();
             }
 

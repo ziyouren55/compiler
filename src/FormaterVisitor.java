@@ -75,7 +75,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
         String constName = ctx.IDENT().getText();
 
         if (curScope.find(constName) != null) {
-//            outputHelper.printSemanticError(ErrorType.REDEFINED_VAR, ctx.IDENT().getSymbol().getLine(), constName);
+            outputHelper.printSemanticError(ErrorType.REDEFINED_VAR, ctx.IDENT().getSymbol().getLine(), constName);
             return "error " + ErrorType.REDEFINED_VAR.getErrorCode();
         }
 
@@ -138,8 +138,8 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
     {
         String varName = ctx.IDENT().getText(); // c or d
         if (curScope.localFind(varName) != null) {
-//            outputHelper.printSemanticError(ErrorType.REDEFINED_VAR, ctx.IDENT().getSymbol().getLine(),
-//                    ctx.IDENT().getText());
+            outputHelper.printSemanticError(ErrorType.REDEFINED_VAR, ctx.IDENT().getSymbol().getLine(),
+                    ctx.IDENT().getText());
             return "error "+ErrorType.REDEFINED_VAR.getErrorCode();
         }
 
@@ -182,9 +182,9 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
 
         // 检查当前作用域中是否已存在该函数（重定义错误）
         if (curScope.localFind(funcName) != null) {
-//            outputHelper.printSemanticError(ErrorType.REDEFINED_FUNC,
-//                ctx.IDENT().getSymbol().getLine(),
-//                "Redefined function: " + funcName);
+            outputHelper.printSemanticError(ErrorType.REDEFINED_FUNC,
+                ctx.IDENT().getSymbol().getLine(),
+                "Redefined function: " + funcName);
             return "error "+ErrorType.REDEFINED_FUNC.getErrorCode();
 
         }
@@ -260,8 +260,8 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
 
         // 检查当前作用域中是否已经存在该形参
         if (curScope.find(paramName) != null) {
-//            outputHelper.printSemanticError(ErrorType.REDEFINED_VAR,
-//                ctx.IDENT().getSymbol().getLine(), paramName);
+            outputHelper.printSemanticError(ErrorType.REDEFINED_VAR,
+                ctx.IDENT().getSymbol().getLine(), paramName);
             // 按要求只保留第一次出现的形参
             return "error "+ErrorType.REDEFINED_VAR.getErrorCode();
 
@@ -345,8 +345,8 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             }
             if(!retTY.equals(curFuncRetTy))
             {
-//                outputHelper.printSemanticError(ErrorType.FUNC_RETURN_TYPE_MISMATCH,
-//                    ctx.SEMICOLON().getSymbol().getLine(),"return type error");
+                outputHelper.printSemanticError(ErrorType.FUNC_RETURN_TYPE_MISMATCH,
+                    ctx.SEMICOLON().getSymbol().getLine(),"return type error");
                 return "error "+ErrorType.FUNC_RETURN_TYPE_MISMATCH.getErrorCode();
             }
 
@@ -365,8 +365,8 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
 
             if(!lValTY.equals(expTY) && !(lValTY.startsWith("error") || expTY.startsWith("error")))
             {
-//                outputHelper.printSemanticError(ErrorType.MISMATCH_ASSIGN,
-//                    ctx.ASSIGN().getSymbol().getLine(),"missMatch");
+                outputHelper.printSemanticError(ErrorType.MISMATCH_ASSIGN,
+                    ctx.ASSIGN().getSymbol().getLine(),"missMatch");
                 return "error "+ErrorType.MISMATCH_ASSIGN.getErrorCode();
             }
         }
@@ -575,8 +575,8 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
                 TerminalNode opNode = (TerminalNode) ctx.getChild(2 * i - 1);
                 // 如果类型不匹配，则报告错误：Invalid operator usage
                 // 这里假设 ctx.getChild(2*i-1) 为包含操作符的节点，其行号作为错误行号
-//                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR,
-//                    opNode.getSymbol().getLine(), operator);
+                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR,
+                    opNode.getSymbol().getLine(), operator);
                 return "error "+ ErrorType.INVALID_OPERATOR.getErrorCode();
             }
 
@@ -602,7 +602,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             // 检查左右操作数是否均为 int 类型
             if (!resultType.equals(rightType) || !resultType.equals("int"))
             {
-//                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR, opNode.getSymbol().getLine(), opNode.getText());
+                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR, opNode.getSymbol().getLine(), opNode.getText());
                 return "error "+ErrorType.INVALID_OPERATOR.getErrorCode();
 
             }

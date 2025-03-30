@@ -413,17 +413,17 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
 //            outputHelper.printSemanticError(ErrorType.ASSIGN_TO_NON_VAR
 //                ,ctx.IDENT().getSymbol().getLine(), varName);
 //            return "error "+ ErrorType.ASSIGN_TO_NON_VAR.getErrorCode();
-            if(ctx.getChildCount() > 1 && ctx.getChild(1).getText().equals("["))
-                outputHelper.printSemanticError(ErrorType.NON_ARRAY_SUBSCRIPT,
-                    ctx.IDENT().getSymbol().getLine(),varName);
+//            if(ctx.getChildCount() > 1 && ctx.getChild(1).getText().equals("["))
+//                outputHelper.printSemanticError(ErrorType.NON_ARRAY_SUBSCRIPT,
+//                    ctx.IDENT().getSymbol().getLine(),varName);
             return "func";
         }
 
         if(varType instanceof IntType)
         {
-            if(ctx.getChildCount()>1 && ctx.getChild(1).getText().equals("["))
-                outputHelper.printSemanticError(ErrorType.NON_ARRAY_SUBSCRIPT,
-                    ctx.IDENT().getSymbol().getLine(),varName);
+//            if(ctx.getChildCount()>1 && ctx.getChild(1).getText().equals("["))
+//                outputHelper.printSemanticError(ErrorType.NON_ARRAY_SUBSCRIPT,
+//                    ctx.IDENT().getSymbol().getLine(),varName);
             return "int";
         }
 
@@ -433,9 +433,9 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             int remainDims = ((ArrayType) varType).getNumElements() - indexCount;
             if (remainDims < 0)
             {
-                outputHelper.printSemanticError(ErrorType.NON_ARRAY_SUBSCRIPT,
-                    ctx.IDENT().getSymbol().getLine(), varName);
-                return "error " + ErrorType.NON_ARRAY_SUBSCRIPT.getErrorCode();
+//                outputHelper.printSemanticError(ErrorType.NON_ARRAY_SUBSCRIPT,
+//                    ctx.IDENT().getSymbol().getLine(), varName);
+                return "error arr";
             }
 
             if (remainDims == 0)

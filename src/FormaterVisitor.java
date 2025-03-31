@@ -714,7 +714,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             // 访问右侧的乘法表达式
             String rightType = visit(ctx.eqExp(i));
             // 检查左右操作数是否均为 int 类型
-            if (!resultType.equals(rightType) || !resultType.equals("bool"))
+            if (!resultType.equals(rightType))
             {
                 outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR, opNode.getSymbol().getLine(), opNode.getText());
                 return "error "+ErrorType.INVALID_OPERATOR.getErrorCode();
@@ -737,7 +737,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
             // 访问右侧的乘法表达式
             String rightType = visit(ctx.lAndExp(i));
             // 检查左右操作数是否均为 int 类型
-            if (!resultType.equals(rightType) || !resultType.equals("bool"))
+            if (!resultType.equals(rightType))
             {
                 outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR, opNode.getSymbol().getLine(), opNode.getText());
                 return "error "+ErrorType.INVALID_OPERATOR.getErrorCode();

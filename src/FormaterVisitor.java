@@ -413,8 +413,7 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
     @Override
     public String visitCond(SysYParser.CondContext ctx)
     {
-        visit(ctx.lOrExp());
-        return "";
+        return visit(ctx.lOrExp());
     }
 
     @Override
@@ -554,7 +553,25 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
         else
         {
             // 第一个子节点为操作符，第二个子节点为后续的 unaryExp
-            return visit(ctx.unaryExp());
+            String type = visit(ctx.unaryExp());
+            String op = ctx.unaryOp().getText();
+            if(op.equals("+") && !type.equals("int"))
+            {
+                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR,
+                    ctx.unaryOp().PLUS().getSymbol().getLine(),"unaryOp '+' invalid");
+            }
+            if(op.equals("-") && !type.equals("int"))
+            {
+                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR,
+                    ctx.unaryOp().MINUS().getSymbol().getLine(),"unaryOp '+' invalid");
+            }
+            if(op.equals("!") && !type.equals("bool"))
+            {
+                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR,
+                    ctx.unaryOp().NOT().getSymbol().getLine(),"unaryOp '+' invalid");
+            }
+
+            return type;
             // 根据具体操作符可能需要进行类型检查，
             // 此处仅简单返回操作数的检查结果
         }
@@ -642,33 +659,98 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
     @Override
     public String visitRelExp(SysYParser.RelExpContext ctx)
     {
-        for (SysYParser.AddExpContext addExpContext : ctx.addExp())
-            visit(addExpContext);
-        return "";
+        String resultType = visit(ctx.addExp(0));
+        // 遍历所有的布尔操作，每个操作符位于解析树中相应位置
+        for (int i = 1; i < ctx.addExp().size(); i++)
+        {
+            // 运算符通常在子节点中位于 2*i-1 位置
+            TerminalNode opNode = (TerminalNode) ctx.getChild(2 * i - 1);
+            // 访问右侧的乘法表达式
+            String rightType = visit(ctx.addExp(i));
+            // 检查左右操作数是否均为 int 类型
+            if (!resultType.equals(rightType))
+            {
+                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR, opNode.getSymbol().getLine(), opNode.getText());
+                return "error "+ErrorType.INVALID_OPERATOR.getErrorCode();
+            }
+            if(resultType.equals("func"))
+            {
+                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR, opNode.getSymbol().getLine(), opNode.getText());
+                return "error "+ErrorType.INVALID_OPERATOR.getErrorCode();
+            }
+            // 加减运算的结果仍为 int 类型
+            resultType = "bool";
+        }
+        return resultType;
     }
 
     @Override
     public String visitEqExp(SysYParser.EqExpContext ctx)
     {
-        for (SysYParser.RelExpContext relExpContext : ctx.relExp())
-            visit(relExpContext);
-        return "";
+        String resultType = visit(ctx.relExp(0));
+        // 遍历所有的布尔操作，每个操作符位于解析树中相应位置
+        for (int i = 1; i < ctx.relExp().size(); i++)
+        {
+            // 运算符通常在子节点中位于 2*i-1 位置
+            TerminalNode opNode = (TerminalNode) ctx.getChild(2 * i - 1);
+            // 访问右侧的乘法表达式
+            String rightType = visit(ctx.relExp(i));
+            // 检查左右操作数是否均为 int 类型
+            if (!resultType.equals(rightType))
+            {
+                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR, opNode.getSymbol().getLine(), opNode.getText());
+                return "error "+ErrorType.INVALID_OPERATOR.getErrorCode();
+            }
+            // 加减运算的结果仍为 int 类型
+            resultType = "bool";
+        }
+        return resultType;
     }
 
     @Override
     public String visitLAndExp(SysYParser.LAndExpContext ctx)
     {
-        for (SysYParser.EqExpContext eqExpContext : ctx.eqExp())
-            visit(eqExpContext);
-        return "";
+        String resultType = visit(ctx.eqExp(0));
+        // 遍历所有的布尔操作，每个操作符位于解析树中相应位置
+        for (int i = 1; i < ctx.eqExp().size(); i++)
+        {
+            // 运算符通常在子节点中位于 2*i-1 位置
+            TerminalNode opNode = (TerminalNode) ctx.getChild(2 * i - 1);
+            // 访问右侧的乘法表达式
+            String rightType = visit(ctx.eqExp(i));
+            // 检查左右操作数是否均为 int 类型
+            if (!resultType.equals(rightType) || !resultType.equals("bool"))
+            {
+                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR, opNode.getSymbol().getLine(), opNode.getText());
+                return "error "+ErrorType.INVALID_OPERATOR.getErrorCode();
+            }
+            // 加减运算的结果仍为 int 类型
+            resultType = "bool";
+        }
+        return resultType;
     }
 
     @Override
     public String visitLOrExp(SysYParser.LOrExpContext ctx)
     {
-        for (SysYParser.LAndExpContext lAndExpContext : ctx.lAndExp())
-            visit(lAndExpContext);
-        return "";
+        String resultType = visit(ctx.lAndExp(0));
+        // 遍历所有的布尔操作，每个操作符位于解析树中相应位置
+        for (int i = 1; i < ctx.lAndExp().size(); i++)
+        {
+            // 运算符通常在子节点中位于 2*i-1 位置
+            TerminalNode opNode = (TerminalNode) ctx.getChild(2 * i - 1);
+            // 访问右侧的乘法表达式
+            String rightType = visit(ctx.lAndExp(i));
+            // 检查左右操作数是否均为 int 类型
+            if (!resultType.equals(rightType) || !resultType.equals("bool"))
+            {
+                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR, opNode.getSymbol().getLine(), opNode.getText());
+                return "error "+ErrorType.INVALID_OPERATOR.getErrorCode();
+            }
+            // 加减运算的结果仍为 int 类型
+            resultType = "bool";
+        }
+        return resultType;
     }
 
     private String matchSimilarExp(ParserRuleContext ctx, List<String> ops)

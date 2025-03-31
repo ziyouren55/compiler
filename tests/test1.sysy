@@ -7,7 +7,7 @@ void dfg(){
 int returnArray() {
     int arr[3] = {1, 2, 3};
     int a = 1;
-    if(dfg >= a)
+    if(dfg >= dfg)
     {
         int b = 1;
     }

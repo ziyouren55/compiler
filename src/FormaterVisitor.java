@@ -673,11 +673,6 @@ public class FormaterVisitor extends SysYParserBaseVisitor<String>
                 outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR, opNode.getSymbol().getLine(), opNode.getText());
                 return "error "+ErrorType.INVALID_OPERATOR.getErrorCode();
             }
-            if(resultType.equals("func"))
-            {
-                outputHelper.printSemanticError(ErrorType.INVALID_OPERATOR, opNode.getSymbol().getLine(), opNode.getText());
-                return "error "+ErrorType.INVALID_OPERATOR.getErrorCode();
-            }
             // 加减运算的结果仍为 int 类型
             resultType = "bool";
         }

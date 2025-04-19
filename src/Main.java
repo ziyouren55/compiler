@@ -2,7 +2,10 @@ import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.tree.ParseTree;
+import org.llvm4j.llvm4j.Module;
+import org.llvm4j.optional.Option;
 
+import java.io.File;
 import java.io.IOException;
 
 //java -jar .\lib\antlr-4.9.1-complete.jar -listener -visitor -long-messages .\src\SysYLexer.g4 .\src\SysYParser.g4
@@ -11,10 +14,11 @@ public class Main {
 
     public static void main(String[] args) throws IOException
     {
-        if (args.length < 1) {
-            System.err.println("input path is required");
+        if (args.length < 2) {
+            System.err.println("input and output path is required");
         }
         String source = args[0];
+        String output = args[1];
         CharStream input = CharStreams.fromFileName(source);
 
         CommonTokenStream tokens = lexerAnalysis(input);
@@ -23,6 +27,9 @@ public class Main {
 
         LLVMIRVisitor llvmirVisitor = new LLVMIRVisitor();
         llvmirVisitor.visit(tree);
+
+        Module module = llvmirVisitor.getMod();
+        module.dump(Option.of(new File(output)));
 
     }
 

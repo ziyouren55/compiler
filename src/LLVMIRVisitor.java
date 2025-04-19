@@ -20,16 +20,16 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     private List<String> paramsNameList = new ArrayList<>();
     private Stack<BasicBlock> continueStack = new Stack<>();
     private Stack<BasicBlock> breakStack = new Stack<>();
+    private Stack<List<Value>> rParamsStack = new Stack<>();
     private Function currentFunction;
     private int tmpCnt = 0;
     private boolean lastTerminatorGenerated = false;
 
-    private static final Context context = new Context();
-    private static final IRBuilder builder = context.newIRBuilder();
-    private static final Module mod = context.newModule("module");
-    private static final IntegerType i32 = context.getInt32Type();
-    private static final ConstantInt zero = i32.getConstant(0, false);
-    private final File outputFile = new File("tests/output.ll");
+    private final Context context = new Context();
+    private final IRBuilder builder = context.newIRBuilder();
+    private final Module mod = context.newModule("module");
+    private final IntegerType i32 = context.getInt32Type();
+    private final ConstantInt zero = i32.getConstant(0, false);
 
     public Module getMod()
     {
@@ -80,8 +80,6 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
             };  // 处理每个声明
 
         }
-
-        mod.dump(Option.of(outputFile));
 
         return null;
     }
@@ -134,8 +132,10 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
         // 根据是否有数组维度区分标量和数组
         if (dimensions.isEmpty())
         {
+            var globalVar = mod.addGlobalVariable(constName, i32, Option.empty()).unwrap();
+            globalVar.setInitializer((Constant) constInitValue);
             // 标量常量
-            globalScope.put(constName, constInitValue);
+            globalScope.put(constName, globalVar);
             mod.addGlobalVariable(constName, i32, Option.empty());
             log("Defined scalar constant: " + constName);
         }
@@ -587,14 +587,15 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     @Override
     public Value visitUnaryExp(SysYParser.UnaryExpContext ctx)
     {
-        if (ctx.primaryExp() != null) return visitPrimaryExp(ctx.primaryExp());
+        if (ctx.primaryExp() != null)
+            return visitPrimaryExp(ctx.primaryExp());
         if (ctx.IDENT() != null)
         {
             // 调用
             Function fn = mod.getFunction(ctx.IDENT().getText()).unwrap();
-            List<Value> args = ctx.funcRParams().exp().stream()
-                .map(this::visit)
-                .collect(Collectors.toList());
+            visitFuncRParams(ctx.funcRParams());
+            List<Value> args =rParamsStack.pop();
+
             return builder.buildCall(fn, args.toArray(new Value[0]), Option.of(genTmp("call")));
         }
         // 一元
@@ -612,6 +613,24 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
             default:
                 throw new RuntimeException(op);
         }
+    }
+
+    @Override
+    public Value visitFuncRParams(SysYParser.FuncRParamsContext ctx)
+    {
+        List<Value> paramsList = new ArrayList<>();
+        if(ctx == null)
+        {
+            rParamsStack.push(paramsList);
+            return null;
+        }
+
+        for (SysYParser.ExpContext expCtx : ctx.exp()) {
+            Value value = visitExp(expCtx);
+            paramsList.add(value);
+        }
+        rParamsStack.push(paramsList);
+        return null;
     }
 
     @Override

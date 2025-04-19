@@ -18,8 +18,11 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     private StringBuilder log = new StringBuilder();
     private List<Type> paramsTyList = new ArrayList<>();
     private List<String> paramsNameList = new ArrayList<>();
-    private Stack<BasicBlock> loopStack = new Stack<>();
+    private Stack<BasicBlock> continueStack = new Stack<>();
+    private Stack<BasicBlock> breakStack = new Stack<>();
+    private Function currentFunction;
     private int tmpCnt = 0;
+    private boolean lastTerminatorGenerated = false;
 
     private static final Context context = new Context();
     private static final IRBuilder builder = context.newIRBuilder();
@@ -185,19 +188,28 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     {
         String varName = ctx.IDENT().getText();
           // 处理初始化表达式
-        Value initVal;
-        if (ctx.ASSIGN() != null) {
-            initVal = visitInitVal(ctx.initVal());
-        } else {
-            // 默认初始值为零，这里假设全局变量 zero 是 i32 类型的零常量
-            initVal = zero;
+        Value initVal = (ctx.ASSIGN() != null)
+        ? visitInitVal(ctx.initVal())
+        : i32.getConstant(0, false);
+
+         // 2. 如果 currentFunction==null，就当做全局变量处理
+        if (currentFunction == null) {
+            // a) 在模块里添加全局变量
+            var gVar = mod
+              .addGlobalVariable(varName, context.getInt32Type(), Option.empty())
+              .unwrap();
+            // b) 设置初始值
+            gVar.setInitializer((Constant) initVal);
+            // c) 保存到你的全局符号表
+            globalScope.put(varName, gVar);
+            return gVar;
         }
 
         // 局部变量需要调用 builder.buildAlloca 分配内存
         Value localVar = builder.buildAlloca(i32, Option.of(varName));
         curScope.put(varName, localVar);
         if (ctx.ASSIGN() != null) {
-            builder.buildStore(initVal, localVar);
+            builder.buildStore(localVar, initVal);
         }
 
         return initVal;
@@ -239,9 +251,15 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
             retType = context.getVoidType(); // 假设存在VoidType类
         }
 
+         try(Value value = visitFuncFParams(ctx.funcFParams()))
+        {
+            log("finish one FParams");
+        }
+
         FunctionType ft = context
             .getFunctionType(retType, paramsTyList.toArray(new Type[0]), false);
         Function func = mod.addFunction(funcName, ft);
+        currentFunction = func;
 
         // 创建 entry block
         BasicBlock entry = context.newBasicBlock(funcName + "Entry");
@@ -280,6 +298,9 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     {
         paramsNameList.clear();
         paramsTyList.clear();
+
+        if(ctx == null)
+            return null;
 
         // 遍历所有的形参
         for (SysYParser.FuncFParamContext paramCtx : ctx.funcFParam()) {
@@ -337,15 +358,17 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     @Override
     public Value visitStmt(SysYParser.StmtContext ctx)
     {
+        lastTerminatorGenerated = false;
+
         if (ctx.ASSIGN() != null)
         {
             // Handle assignment statement
             return visitAssignStmt(ctx);
         }
-        else if (ctx.exp() != null)
+        else if (ctx.getChild(0).getText().equals("return"))
         {
-            // Handle expression statement
-            return visitExp(ctx.exp());
+            // Handle return statement
+            return visitReturnStmt(ctx);
         }
         else if (ctx.block() != null)
         {
@@ -366,22 +389,25 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
         {
             //tba
             // 从栈中获取当前最内层循环的 mergeBlock
-            BasicBlock innerLoopMergeBlock = loopStack.peek();
+            BasicBlock innerLoopMergeBlock = breakStack.peek();
             // 构造跳转到最内层循环的 mergeBlock（结束循环）
             builder.buildBranch(innerLoopMergeBlock);
+            lastTerminatorGenerated = true;
         }
         else if(ctx.getChild(0).getText().equals("continue"))
         {
             //tba
             // 从栈中获取当前最内层循环的条件判断基本块（condBlock）
-            BasicBlock innerLoopCondBlock = loopStack.peek();
+            BasicBlock innerLoopCondBlock = continueStack.peek();
             // 构造跳转到最内层循环的 condBlock（进行条件判断）
             builder.buildBranch(innerLoopCondBlock);  // 使用 buildBranch 跳回条件判断
+            lastTerminatorGenerated = true;
         }
-        else if (ctx.getChild(0).getText().equals("return"))
+
+        else if (ctx.exp() != null)
         {
-            // Handle return statement
-            return visitReturnStmt(ctx);
+            // Handle expression statement
+            return visitExp(ctx.exp());
         }
         return null;
     }
@@ -390,12 +416,14 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     private Value visitAssignStmt(SysYParser.StmtContext ctx)
     {
         // Load the left-hand value (LVal) to obtain a pointer
-        Value leftVal = visitLVal(ctx.lVal());
+        String leftValName = ctx.lVal().IDENT().getText();
+        Value leftVal = curScope.find(leftValName);
+
         // Evaluate the right-hand expression
         Value rightVal = visitExp(ctx.exp());
 
         // Store the right-hand value into the left-hand value's location
-        builder.buildStore(rightVal, leftVal);
+        builder.buildStore(leftVal, rightVal);
         return null;
     }
 
@@ -409,20 +437,32 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
         BasicBlock falseBlock = context.newBasicBlock("if_false");
         BasicBlock mergeBlock = context.newBasicBlock("if_merge");
 
+        currentFunction.addBasicBlock(trueBlock);
+        currentFunction.addBasicBlock(falseBlock);
+        currentFunction.addBasicBlock(mergeBlock);
+
         // 构造条件跳转
         builder.buildConditionalBranch(cond, trueBlock, falseBlock);
 
         // 处理 if 分支
         builder.positionAfter(trueBlock);
         visitStmt(ctx.stmt(0));  // true分支的语句
-        builder.buildBranch(mergeBlock);  // 无条件跳转到 mergeBlock
+        if(!lastTerminatorGenerated)
+            builder.buildBranch(mergeBlock);  // 无条件跳转到 mergeBlock
 
         // 处理 else 分支（如果存在）
         builder.positionAfter(falseBlock);
         if (ctx.stmt().size() > 1)
         {
             visitStmt(ctx.stmt(1));  // false分支的语句
+            if(!lastTerminatorGenerated)
+                builder.buildBranch(mergeBlock);
         }
+        else
+        {
+            builder.buildBranch(mergeBlock);
+        }
+
 
         // 合并两个分支
         builder.positionAfter(mergeBlock);
@@ -436,8 +476,15 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
         BasicBlock bodyBlock = context.newBasicBlock("while_body");
         BasicBlock mergeBlock = context.newBasicBlock("while_merge");
 
-        // 将当前循环的 condBlock 压入栈
-        loopStack.push(condBlock);
+
+        currentFunction.addBasicBlock(condBlock);
+        currentFunction.addBasicBlock(bodyBlock);
+        currentFunction.addBasicBlock(mergeBlock);
+
+         // 2) push 两个栈
+        continueStack.push(condBlock);    // continue 回到这里
+        breakStack.push(mergeBlock);      // break 跳到这里
+
 
         // 初始跳转到条件判断
         builder.buildBranch(condBlock);
@@ -457,8 +504,9 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
         // 处理合并后的代码（循环退出后）
         builder.positionAfter(mergeBlock);
 
-        // 弹出栈中的循环块
-        loopStack.pop();
+        // pop 两个栈
+        continueStack.pop();
+        breakStack.pop();
 
         return null;
     }
@@ -487,15 +535,21 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     @Override
     public Value visitCond(SysYParser.CondContext ctx)
     {
-        return visitLOrExp(ctx.lOrExp());
+        Value intVal = visitLOrExp(ctx.lOrExp());            // i32
+        return builder.buildIntCompare(
+            IntPredicate.NotEqual,
+            intVal, zero,                                   // i32 != 0 -> i1
+            Option.of("cond")
+        );
     }
 
     @Override
     public Value visitLVal(SysYParser.LValContext ctx)
     {
         String name = ctx.IDENT().getText();
+        Value ptr = curScope.find(name);
 
-        return curScope.find(name);
+        return builder.buildLoad(ptr, Option.of(name + "_val"));
     }
 
     @Override
@@ -533,7 +587,7 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     @Override
     public Value visitUnaryExp(SysYParser.UnaryExpContext ctx)
     {
-        if (ctx.primaryExp() != null) return visit(ctx.primaryExp());
+        if (ctx.primaryExp() != null) return visitPrimaryExp(ctx.primaryExp());
         if (ctx.IDENT() != null)
         {
             // 调用
@@ -605,7 +659,7 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     public Value visitAddExp(SysYParser.AddExpContext ctx)
     {
         // 1. 先计算第一个 mulExp
-        Value acc = visit(ctx.mulExp(0));
+        Value acc = visitMulExp(ctx.mulExp(0));
         // 2. 依次处理后续的 (‘+’ | ‘-’) mulExp
         for (int i = 1; i < ctx.mulExp().size(); i++)
         {
@@ -641,11 +695,11 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     public Value visitRelExp(SysYParser.RelExpContext ctx)
     {
         // 先生成第一个 addExp 的 i32 值
-        Value acc = visit(ctx.addExp(0));
+        Value acc = visitAddExp(ctx.addExp(0));
         // 依次处理每个比较
         for (int i = 1; i < ctx.addExp().size(); i++)
         {
-            Value rhs = visit(ctx.addExp(i));
+            Value rhs = visitAddExp(ctx.addExp(i));
             String op = ctx.getChild(2 * i - 1).getText();  // 比较符在子节点 2*i-1
             IntPredicate pred;
             switch (op)
@@ -681,10 +735,10 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     @Override
     public Value visitEqExp(SysYParser.EqExpContext ctx)
     {
-        Value acc = visit(ctx.relExp(0));
+        Value acc = visitRelExp(ctx.relExp(0));
         for (int i = 1; i < ctx.relExp().size(); i++)
         {
-            Value rhs = visit(ctx.relExp(i));
+            Value rhs = visitRelExp(ctx.relExp(i));
             String op = ctx.getChild(2 * i - 1).getText();
             IntPredicate pred = op.equals("==")
                 ? IntPredicate.Equal
@@ -706,14 +760,14 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     public Value visitLAndExp(SysYParser.LAndExpContext ctx)
     {
         // 首先生成第一个 eqExp 的值，并转成 i1 真假标志
-        Value accVal = visit(ctx.eqExp(0));
+        Value accVal = visitEqExp(ctx.eqExp(0));
         Value accBool = builder.buildIntCompare(
             IntPredicate.NotEqual, accVal, zero, Option.of(genTmp("neq"))
         );
         // 对后续每个 '&& eqExp' 继续做 bitwise and
         for (int i = 1; i < ctx.eqExp().size(); i++)
         {
-            Value rhsVal = visit(ctx.eqExp(i));
+            Value rhsVal = visitEqExp(ctx.eqExp(i));
             Value rhsBool = builder.buildIntCompare(
                 IntPredicate.NotEqual, rhsVal, zero, Option.of(genTmp("neq"))
             );
@@ -733,13 +787,13 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     @Override
     public Value visitLOrExp(SysYParser.LOrExpContext ctx)
     {
-        Value accVal = visit(ctx.lAndExp(0));
+        Value accVal = visitLAndExp(ctx.lAndExp(0));
         Value accBool = builder.buildIntCompare(
             IntPredicate.NotEqual, accVal, zero, Option.of(genTmp("neq"))
         );
         for (int i = 1; i < ctx.lAndExp().size(); i++)
         {
-            Value rhsVal = visit(ctx.lAndExp(i));
+            Value rhsVal = visitLAndExp(ctx.lAndExp(i));
             Value rhsBool = builder.buildIntCompare(
                 IntPredicate.NotEqual, rhsVal, zero, Option.of(genTmp("neq"))
             );

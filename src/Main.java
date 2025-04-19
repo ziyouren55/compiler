@@ -18,7 +18,11 @@ public class Main {
         CharStream input = CharStreams.fromFileName(source);
 
         CommonTokenStream tokens = lexerAnalysis(input);
-        ParseTree tree = parserAnalysis(tokens);
+        SysYParser       parser = new SysYParser(tokens);
+        ParseTree        tree   = parser.compUnit();
+
+        LLVMIRVisitor llvmirVisitor = new LLVMIRVisitor();
+        llvmirVisitor.visit(tree);
 
     }
 

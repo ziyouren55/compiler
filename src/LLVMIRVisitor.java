@@ -6,11 +6,9 @@ import org.llvm4j.llvm4j.Type;
 import org.llvm4j.optional.Option;
 import org.llvm4j.llvm4j.IntPredicate;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
-import java.util.stream.Collectors;
 
 public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
 {

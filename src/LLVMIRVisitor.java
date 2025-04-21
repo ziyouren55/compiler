@@ -1,5 +1,6 @@
 import org.llvm4j.llvm4j.*;
 import org.llvm4j.llvm4j.FunctionType;
+import org.llvm4j.llvm4j.Function;
 import org.llvm4j.llvm4j.Module;
 import org.llvm4j.llvm4j.Type;
 import org.llvm4j.optional.Option;
@@ -136,17 +137,9 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
             globalVar.setInitializer((Constant) constInitValue);
             // 标量常量
             globalScope.put(constName, globalVar);
-            mod.addGlobalVariable(constName, i32, Option.empty());
             log("Defined scalar constant: " + constName);
         }
-        else
-        {
-            // 构造数组类型，此处假设有一个辅助方法 buildArrayType 实现数组类型构造
-            Type arrayType = buildArrayType(i32, dimensions);
-            globalScope.put(constName, constInitValue);
-            mod.addGlobalVariable(constName, arrayType, Option.empty());
-            log("Defined array constant: " + constName + " with dimensions: " + dimensions);
-        }
+
         return constInitValue;
     }
 
@@ -275,7 +268,7 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
             Value alloca = builder
                 .buildAlloca(ty, Option.of(name));
 
-            builder.buildStore(arg, alloca);
+            builder.buildStore(alloca,arg);
             curScope.put(name, alloca);
         }
 
@@ -286,6 +279,12 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
         try(Value value = visitBlock(ctx.block()))
         {
             log("finish one block");
+        }
+
+        //todo 出现了两个ret
+        if(retType.getRef().equals(context.getVoidType().getRef()))
+        {
+            builder.buildReturn(Option.empty());
         }
 
         curScope = curScope.getParent();
@@ -429,43 +428,52 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
 
     private Value visitIfStmt(SysYParser.StmtContext ctx)
     {
-        // 计算条件表达式
+
+        /* 1. 计算条件并建三个基本块 */
         Value cond = visitCond(ctx.cond());
 
-        // 创建基本块
-        BasicBlock trueBlock = context.newBasicBlock("if_true");
-        BasicBlock falseBlock = context.newBasicBlock("if_false");
-        BasicBlock mergeBlock = context.newBasicBlock("if_merge");
+        BasicBlock trueBlk = context.newBasicBlock("if_true");
+        BasicBlock falseBlk = context.newBasicBlock("if_false");
+        BasicBlock mergeBlk = context.newBasicBlock("if_merge");
 
-        currentFunction.addBasicBlock(trueBlock);
-        currentFunction.addBasicBlock(falseBlock);
-        currentFunction.addBasicBlock(mergeBlock);
+        currentFunction.addBasicBlock(trueBlk);
+        currentFunction.addBasicBlock(falseBlk);
+        currentFunction.addBasicBlock(mergeBlk);
 
-        // 构造条件跳转
-        builder.buildConditionalBranch(cond, trueBlock, falseBlock);
+        builder.buildConditionalBranch(cond, trueBlk, falseBlk);
 
-        // 处理 if 分支
-        builder.positionAfter(trueBlock);
-        visitStmt(ctx.stmt(0));  // true分支的语句
-        if(!lastTerminatorGenerated)
-            builder.buildBranch(mergeBlock);  // 无条件跳转到 mergeBlock
+        /* 2. 生成 true 分支 */
+        builder.positionAfter(trueBlk);
+        lastTerminatorGenerated = false;
+        visitStmt(ctx.stmt(0));
+        boolean trueHasTerm = lastTerminatorGenerated;
+        if (!trueHasTerm)
+            builder.buildBranch(mergeBlk);
 
-        // 处理 else 分支（如果存在）
-        builder.positionAfter(falseBlock);
+        /* 3. 生成 false 分支（可能没有） */
+        builder.positionAfter(falseBlk);
+        lastTerminatorGenerated = false;
         if (ctx.stmt().size() > 1)
         {
-            visitStmt(ctx.stmt(1));  // false分支的语句
-            if(!lastTerminatorGenerated)
-                builder.buildBranch(mergeBlock);
+            visitStmt(ctx.stmt(1));
+        }
+        boolean falseHasTerm = lastTerminatorGenerated;
+        if (!falseHasTerm)
+            builder.buildBranch(mergeBlk);
+
+        /* 4. merge 块收尾 */
+        if (trueHasTerm && falseHasTerm)
+        {
+            // 两条分支都已经 return / branch 走完，
+            // merge 块没人跳进来，但必须有 terminator
+            builder.positionAfter(mergeBlk);
+            builder.buildUnreachable();
+            // 之后没有插入点；由调用者（visitStmt 上层）再设置
         }
         else
         {
-            builder.buildBranch(mergeBlock);
+            builder.positionAfter(mergeBlk);
         }
-
-
-        // 合并两个分支
-        builder.positionAfter(mergeBlock);
         return null;
     }
 
@@ -523,6 +531,7 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
 
         // Return the evaluated value or void
         builder.buildReturn(Option.of(returnVal));
+        lastTerminatorGenerated = true;
         return null;
     }
 
@@ -563,25 +572,20 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
             return visitExp(ctx.exp());
         }
 
+            /* ---------- 整数字面量 ---------- */
         String text = ctx.INTEGER_CONST().getText();
-        int value;
+        long raw;                       // 先用 long 把 32bit 全兜住
         if (text.startsWith("0x") || text.startsWith("0X"))
-        {
-            // 十六进制
-            value = Integer.parseUnsignedInt(text.substring(2), 16);
-        }
+            raw = Long.parseUnsignedLong(text.substring(2), 16);
         else if (text.startsWith("0") && text.length() > 1)
-        {
-            // 八进制（以 0 开头且不只是 "0"）
-            value = Integer.parseUnsignedInt(text.substring(1), 8);
-        }
+            raw = Long.parseUnsignedLong(text.substring(1), 8);
         else
-        {
-            // 十进制
-            value = Integer.parseInt(text);
-        }
-        // 用 i32 类型生成 ConstantInt
-        return context.getInt32Type().getConstant(value, false);
+            raw = Long.parseLong(text); // 十进制可以直接用有符号
+
+        /* 只取低 32 位，然后告诉 LLVM4J：这是“带符号”常量 */
+        int bits32     = (int) (raw & 0xFFFF_FFFFL);
+        boolean signed = true;          // 必须 sign‑extend，才能处理最高位=1 的情况
+        return i32.getConstant(bits32, signed);   // 绝不会返回 null
     }
 
     @Override
@@ -596,6 +600,9 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
             visitFuncRParams(ctx.funcRParams());
             List<Value> args =rParamsStack.pop();
 
+            Type fnType = fn.getValueType();
+            if(fnType.getAsString().startsWith("void"))
+                return builder.buildCall(fn, args.toArray(new Value[0]), Option.empty());
             return builder.buildCall(fn, args.toArray(new Value[0]), Option.of(genTmp("call")));
         }
         // 一元
@@ -606,7 +613,15 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
             case "+":
                 return v;
             case "-":
-                return builder.buildIntSub(zero, v, WrapSemantics.Unspecified, Option.of(genTmp("neg")));
+                // 处理负号一元操作
+                if (v instanceof ConstantInt)
+                {
+                    long val = ((ConstantInt) v).getSignExtendedValue();
+                    val = -val;  // Java 里先计算
+                    int bits32 = (int) (val & 0xFFFF_FFFFL);
+                    return i32.getConstant(bits32, true);  // 返回负数常量
+                }
+                return builder.buildIntSub(zero, v, WrapSemantics.Unspecified, Option.of(genTmp("neg")));  // 非常量时生成减法指令
             case "!":
                 Value cmp = builder.buildIntCompare(IntPredicate.Equal, v, zero, Option.of(genTmp("eq")));
                 return builder.buildZeroExt(cmp, i32, Option.of(genTmp("zext")));
@@ -737,12 +752,11 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
                     break;
             }
             // 生成 i1 比较
-            Value cmp = builder.buildIntCompare(
-                pred, acc, rhs, Option.of(genTmp("cmp"))
+            Value cmp = builder.buildIntCompare(pred, acc, rhs, Option.of(genTmp("cmp"))
+
             );
             // 扩展到 i32
-            acc = builder.buildZeroExt(
-                cmp, context.getInt32Type(), Option.of(genTmp("zext"))
+            acc = builder.buildZeroExt(cmp, context.getInt32Type(), Option.of(genTmp("zext"))
             );
         }
         return acc;

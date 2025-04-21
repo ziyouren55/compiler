@@ -1,26 +1,123 @@
-int counter = 0;
+int factorial(int n) {
+    if (n == 0 || n == 1) {
+        return 1;
+    } else {
+        return n * factorial(n - 1);
+    }
+}
 
-int increment() {
-  counter = counter + 1;
-  return counter;
+int sum_of_squares(int n) {
+    int sum = 0;
+    while (n > 0) {
+        sum = sum + n * n;
+        n = n - 1;
+    }
+    return sum;
 }
 
 int main() {
-  int a = 1, b = 3;
-  if (a > b || !increment()) {
-    return increment();
-  }
-  counter = 3;
-  if (a > b && increment()) {
-    return increment();
-  }
-  counter = 6;
-  if (a < b && !increment()) {
-    return increment();
-  }
-  counter = 9;
-  if (a > b || increment()) {
-    return increment();
-  }
-  return 0;
+    int a = 100;
+    int b = 50;
+    int c = 30;
+    int d = 1000;
+    int result = 0;
+    int count = 0;
+
+    // 外层 while 循环，条件是 a > 0
+    while (a > 0) {
+        // 每次外层循环，b 减少
+        b = b - 1;
+
+        // 内层 while 循环，条件是 b > c
+        while (b > c) {
+            // 每次内层循环，c 增加
+            c = c + 1;
+            count = count + 1;  // 统计循环次数
+
+            // 内层 if-else 语句：如果 c 是偶数
+            if (c % 2 == 0) {
+                result = result + 10;  // 如果 c 为偶数，增加 10
+            } else {
+                result = result - 5;  // 如果 c 为奇数，减少 5
+            }
+
+            // 使用逻辑非！判断 c 是否为 5
+            if (c >= 5) {
+                result = result + 2;  // 如果 c 大于或等于 5，则 result 增加 2
+            }
+
+            // 使用逻辑与 &&：如果 c 为 4 且 b 为 2
+            if (c == 4 && b == 2) {
+                result = result + 20;  // 如果 c == 4 且 b == 2，result 增加 20
+            }
+
+            // 使用逻辑或 ||：如果 c 为 3 或 b 为 1
+            if (c == 3 || b == 1) {
+                result = result + 30;  // 如果 c == 3 或 b == 1，result 增加 30
+            }
+
+            // 使用比较运算符：如果 a 小于 b
+            if (a < b) {
+                result = result + 100;  // 如果 a < b，则 result 增加 100
+            }
+
+            // 使用不等于运算符：如果 b 不等于 c
+            if (b != c) {
+                result = result + 50;  // 如果 b != c，则 result 增加 50
+            }
+
+            // 如果 c 达到 10，使用 break 跳出内层 while 循环
+            if (c == 10) {
+                break;  // 跳出内层 while 循环
+            }
+
+            // 如果 c 达到 7，使用 continue 跳过本次内层 while 循环
+            if (c == 7) {
+                continue;  // 跳过本次内层 while 循环，继续下一次循环
+            }
+
+            // 调用一个外部函数计算 n 的阶乘
+            if (c == 5) {
+                int fact = factorial(c);  // 计算 c 的阶乘
+                result = result + fact;
+            }
+        }
+
+        // 外层 if-else 语句：如果 a 大于 b
+        if (a > b) {
+            result = result + 1;  // 如果 a > b，result 增加 1
+        } else {
+            result = result - 1;  // 如果 a <= b，result 减少 1
+        }
+
+        // 每次外层循环，a 减少
+        a = a - 10;
+
+        // 如果 a 达到 90，使用 continue 跳过当前外层 while 循环的剩余部分
+        if (a == 90) {
+            continue;  // 跳过本次外层 while 循环，继续下一次循环
+        }
+
+        // 如果 b 达到 3，使用 break 跳出外层 while 循环
+        if (b == 3) {
+            break;  // 跳出外层 while 循环
+        }
+    }
+
+    // 调用一个外部函数计算平方和
+    int square_sum = sum_of_squares(d);  // 计算 1^2 + 2^2 + ... + d^2
+    result = result + square_sum;
+
+    // 使用逻辑与 && 来检查两个条件
+    if (a > b && result > 500) {
+        result = result + 200;  // 如果 a > b 且 result > 500，result 增加 200
+    }
+
+    // 使用逻辑或 || 来检查两个条件
+    if (b == 5 || c == 7) {
+        result = result + 300;  // 如果 b == 5 或 c == 7，result 增加 300
+    }
+
+    // 最终返回 result
+    return result;
 }

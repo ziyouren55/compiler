@@ -1,48 +1,5 @@
 int main() {
-    int a = 10;
-    int b = 0;
-    int count = 0;
-    int total = 0;
-
-    // 外层while循环
-    while (a > 0) {
-        a = a - 1;
-
-        // 判断a是否为偶数
-        if (a % 2 == 0) {
-            b = b + 1;
-
-            // 嵌套while循环，控制b的值
-            while (b < 5) {
-                count = count + 1;
-
-                // 当count大于3时跳过本次循环
-                if (count > 3) {
-                    continue;
-                }
-
-                b = b + 1;
-            }
-
-            // 当b达到某个条件时，退出内层while循环
-            if (b >= 5) {
-                total = total + count;
-                break; // 退出外层while循环
-            }
-        }
-        else {
-            // 如果a为奇数，则进入else块
-            count = count + 2;
-
-            // 如果count超过6，跳出外层while循环
-            if (count > 6) {
-                break;
-            }
-
-            // 继续执行下一个循环
-            continue;
-        }
-    }
-
-    return total;
+    const int max = 2147483647; // INT_MAX
+    const int min = -2147483648; // INT_MIN
+    return max + min; // 应该返回255
 }

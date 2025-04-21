@@ -44,25 +44,6 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
         return prefix + "_" + (tmpCnt++);
     }
 
-    // 辅助方法：从基本类型和维度列表构造嵌套的数组类型
-    private Type buildArrayType(Type baseType, List<Value> dimensions) {
-        Type type = baseType;
-        // 倒序构造：先构造最内层数组，再构造外层数组
-        for (int i = dimensions.size() - 1; i >= 0; i--) {
-            int len = extractIntValue(dimensions.get(i)); // 提取整型常量值，例如 4, 再 3
-            // context.getArrayType 用于构造固定大小的数组类型，例如 [len x type]
-            type = context.getArrayType(type, len).unwrap();
-        }
-        return type;
-    }
-
-    private int extractIntValue(Value value) {
-        if (value instanceof ConstantInt) {
-            ConstantInt constInt = (ConstantInt) value;
-            return (int) constInt.getSignExtendedValue(); // 返回常量的整型值
-        }
-        throw new IllegalArgumentException("期望传入 ConstantInt 类型的值，但实际类型不匹配");
-    }
 
     @Override
     public Value visitCompUnit(SysYParser.CompUnitContext ctx)
@@ -115,27 +96,26 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     {
         String constName = ctx.IDENT().getText();
 
-        // 计算数组维度（如果有的话）
-        List<Value> dimensions = new ArrayList<>();
-        // 注意：如果有多个 '[' constExp ']'，则 ctx.constExp() 返回包含所有对应子节点
-        for (SysYParser.ConstExpContext expCtx : ctx.constExp())
-        {
-            // 计算每个维度大小，假设返回的值为整数常量
-            Value dimVal = visitConstExp(expCtx);
-            dimensions.add(dimVal);
-        }
-
         // 计算常量的初始值
         Value constInitValue = visitConstInitVal(ctx.constInitVal());
 
-        // 根据是否有数组维度区分标量和数组
-        if (dimensions.isEmpty())
+        // 判断是否为局部常量或全局常量
+        if (curScope == globalScope)
         {
+            // 如果当前作用域是全局作用域，处理为全局常量
             var globalVar = mod.addGlobalVariable(constName, i32, Option.empty()).unwrap();
             globalVar.setInitializer((Constant) constInitValue);
-            // 标量常量
-            globalScope.put(constName, globalVar);
-            log("Defined scalar constant: " + constName);
+            globalScope.put(constName, globalVar); // 保存到全局符号表
+            log("Defined global constant: " + constName);
+        }
+        else
+        {
+            // 否则，假设是局部常量
+            // 在函数内部为局部常量分配内存
+            Value localVar = builder.buildAlloca(i32, Option.of(constName));
+            builder.buildStore(localVar, constInitValue);
+            curScope.put(constName, localVar);  // 保存到局部符号表
+            log("Defined local constant: " + constName);
         }
 
         return constInitValue;
@@ -144,20 +124,7 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     @Override
     public Value visitConstInitVal(SysYParser.ConstInitValContext ctx)
     {
-        if(!ctx.constInitVal().isEmpty())
-        {
-            for (int i = 0;i < ctx.constInitVal().size(); i++)
-                try(Value value = visitConstInitVal(ctx.constInitVal(i));)
-                {
-                    log("finish one constInitVal");
-                }
-        }
-        else
-        {
-            // 否则认为是单个常量表达式
-            return visitConstExp(ctx.constExp());
-        }
-        return null;
+        return visitConstExp(ctx.constExp());
     }
 
     @Override
@@ -846,7 +813,5 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
         // 常量表达式直接走 addExp 的实现
         return visit(ctx.addExp());
     }
-
-
 
 }

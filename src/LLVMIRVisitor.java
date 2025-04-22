@@ -21,6 +21,8 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     private Stack<BasicBlock> breakStack = new Stack<>();
     private Stack<List<Value>> rParamsStack = new Stack<>();
     private Function currentFunction;
+    private BasicBlock condTrueBlock;
+    private BasicBlock condFalseBlock;
     private int tmpCnt = 0;
     private boolean lastTerminatorGenerated = false;
 
@@ -246,10 +248,10 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
             log("finish one block");
         }
 
-        //todo 出现了两个ret
-        if(retType.getRef().equals(context.getVoidType().getRef()))
+        if(retType.getRef().equals(context.getVoidType().getRef()) && !lastTerminatorGenerated)
         {
             builder.buildReturn(Option.empty());
+            lastTerminatorGenerated = true;
         }
 
         curScope = curScope.getParent();
@@ -395,8 +397,6 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     {
 
         /* 1. 计算条件并建三个基本块 */
-        Value cond = visitCond(ctx.cond());
-
         BasicBlock trueBlk = context.newBasicBlock("if_true");
         BasicBlock falseBlk = context.newBasicBlock("if_false");
         BasicBlock mergeBlk = context.newBasicBlock("if_merge");
@@ -405,7 +405,10 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
         currentFunction.addBasicBlock(falseBlk);
         currentFunction.addBasicBlock(mergeBlk);
 
-        builder.buildConditionalBranch(cond, trueBlk, falseBlk);
+        condTrueBlock = trueBlk;
+        condFalseBlock = falseBlk;
+
+        genLOr(ctx.cond().lOrExp(), trueBlk, falseBlk);
 
         /* 2. 生成 true 分支 */
         builder.positionAfter(trueBlk);
@@ -449,7 +452,6 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
         BasicBlock bodyBlock = context.newBasicBlock("while_body");
         BasicBlock mergeBlock = context.newBasicBlock("while_merge");
 
-
         currentFunction.addBasicBlock(condBlock);
         currentFunction.addBasicBlock(bodyBlock);
         currentFunction.addBasicBlock(mergeBlock);
@@ -458,16 +460,14 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
         continueStack.push(condBlock);    // continue 回到这里
         breakStack.push(mergeBlock);      // break 跳到这里
 
+        condTrueBlock = bodyBlock;
+        condFalseBlock = mergeBlock;
 
         // 初始跳转到条件判断
         builder.buildBranch(condBlock);
         builder.positionAfter(condBlock);
 
-        // 计算条件表达式
-        Value cond = visitCond(ctx.cond());
-
-        // 根据条件决定是否跳转到循环体或退出
-        builder.buildConditionalBranch(cond, bodyBlock, mergeBlock);
+        genLOr(ctx.cond().lOrExp(), bodyBlock, mergeBlock);
 
         // 处理循环体
         builder.positionAfter(bodyBlock);
@@ -762,9 +762,16 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
         Value accBool = builder.buildIntCompare(
             IntPredicate.NotEqual, accVal, zero, Option.of(genTmp("neq"))
         );
+
+
         // 对后续每个 '&& eqExp' 继续做 bitwise and
         for (int i = 1; i < ctx.eqExp().size(); i++)
         {
+            BasicBlock rhsBlcTrue = context.newBasicBlock(genTmp("blc_true"));
+            currentFunction.addBasicBlock(rhsBlcTrue);
+            builder.buildConditionalBranch(accBool,rhsBlcTrue,condFalseBlock);
+            builder.positionAfter(rhsBlcTrue);
+
             Value rhsVal = visitEqExp(ctx.eqExp(i));
             Value rhsBool = builder.buildIntCompare(
                 IntPredicate.NotEqual, rhsVal, zero, Option.of(genTmp("neq"))
@@ -774,12 +781,81 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
             );
         }
         // 最后把 i1 结果扩展回 i32
-        return builder.buildZeroExt(
-            accBool, context.getInt32Type(), Option.of(genTmp("zext"))
-        );
+        return builder.buildZeroExt(accBool, context.getInt32Type(), Option.of(genTmp("zext")));
     }
 // :contentReference[oaicite:2]{index=2}
 
+    /**
+ * 生成对 CondContext 的短路分支：
+ *   如果为真就跳到 trueBlock，否则跳到 falseBlock
+ */
+    private void genCond(SysYParser.CondContext ctx,
+                         BasicBlock trueBlock,
+                         BasicBlock falseBlock)
+    {
+        genLOr(ctx.lOrExp(), trueBlock, falseBlock);
+    }
+
+    /**
+     * 对 lAndExp 生成短路 &&：如果都真则跳 trueBlock，一假就跳 falseBlock
+     */
+    private void genLAnd(SysYParser.LAndExpContext ctx,
+                         BasicBlock trueBlock,
+                         BasicBlock falseBlock)
+    {
+        List<SysYParser.EqExpContext> parts = ctx.eqExp();
+        // 对每个 eqExp(0..n-2)：
+        //   eval part, 真就进 nextBlock，假就直跳 falseBlock
+        for (int i = 0; i < parts.size() - 1; i++)
+        {
+            BasicBlock next = context.newBasicBlock(genTmp("and.rhs"));
+            currentFunction.addBasicBlock(next);
+
+            // 1) 计算第 i 个子表达式
+            Value v = visitEqExp(parts.get(i));
+            Value cond = builder.buildIntCompare(
+                IntPredicate.NotEqual, v, zero, Option.of(genTmp("neq")));
+
+            // 2) 短路分支：真 -> next，假 -> falseBlock
+            builder.buildConditionalBranch(cond, next, falseBlock);
+
+            // 3) 在 next 继续
+            builder.positionAfter(next);
+        }
+
+        // 最后一个子表达式：真 -> trueBlock，假 -> falseBlock
+        Value vLast = visitEqExp(parts.get(parts.size() - 1));
+        Value condLast = builder.buildIntCompare(
+            IntPredicate.NotEqual, vLast, zero, Option.of(genTmp("neq")));
+        builder.buildConditionalBranch(condLast, trueBlock, falseBlock);
+    }
+
+
+    /**
+     * 对 lOrExp 生成短路 ||：一真就跳 trueBlock，都假才跳 falseBlock
+     */
+    private void genLOr(SysYParser.LOrExpContext ctx,
+                        BasicBlock trueBlock,
+                        BasicBlock falseBlock)
+    {
+        List<SysYParser.LAndExpContext> parts = ctx.lAndExp();
+        // 对每个 lAndExp(0..n-2)：
+        //   eval part, 真就直跳 trueBlock，假就进 nextBlock
+        for (int i = 0; i < parts.size() - 1; i++)
+        {
+            BasicBlock next = context.newBasicBlock(genTmp("or.rhs"));
+            currentFunction.addBasicBlock(next);
+
+            // 1) 短路 OR：先判第 i 个 and 子表达式
+            genLAnd(parts.get(i), trueBlock, next);
+
+            // 2) 在 next 继续判剩下的
+            builder.positionAfter(next);
+        }
+
+        // 最后一个 and 子表达式：真 -> trueBlock，假 -> falseBlock
+        genLAnd(parts.get(parts.size() - 1), trueBlock, falseBlock);
+    }
 
     // lOrExp : lAndExp ('||' lAndExp)* ;
     @Override
@@ -791,13 +867,17 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
         );
         for (int i = 1; i < ctx.lAndExp().size(); i++)
         {
+            BasicBlock rhsBlcFalse = context.newBasicBlock(genTmp("blc_rhs"));
+            currentFunction.addBasicBlock(rhsBlcFalse);
+            builder.buildConditionalBranch(accBool,condTrueBlock,rhsBlcFalse);
+            builder.positionAfter(rhsBlcFalse);
+
             Value rhsVal = visitLAndExp(ctx.lAndExp(i));
             Value rhsBool = builder.buildIntCompare(
                 IntPredicate.NotEqual, rhsVal, zero, Option.of(genTmp("neq"))
             );
             accBool = builder.buildLogicalOr(
-                accBool, rhsBool, Option.of(genTmp("or"))
-            );
+                accBool, rhsBool, Option.of(genTmp("or")));
         }
         return builder.buildZeroExt(
             accBool, context.getInt32Type(), Option.of(genTmp("zext"))

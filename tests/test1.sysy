@@ -1,5 +1,17 @@
-int main() {
-    const int max = 2147483647; // INT_MAX
-    const int min = -2147483648; // INT_MIN
-    return max + min; // 应该返回255
+int counter = 3;
+
+int change() {
+    counter = counter - 1;
+    return counter;
 }
+
+int main() {
+    int a = 0;
+    int b = 1;
+    int c = 1;
+
+    if (a && change() > 0 || b && c) {
+        return counter;
+    }
+    return 0;
+}//返回3

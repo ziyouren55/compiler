@@ -890,8 +890,92 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     @Override
     public Value visitConstExp(SysYParser.ConstExpContext ctx)
     {
-        // 常量表达式直接走 addExp 的实现
-        return visit(ctx.addExp());
+        int v = computeConstAddExp(ctx.addExp());
+        return i32.getConstant(v, false);
+    }
+
+    private int computeConstAddExp(SysYParser.AddExpContext ctx)
+    {
+        int acc = computeConstMulExp(ctx.mulExp(0));
+        for (int i = 1; i < ctx.mulExp().size(); i++)
+        {
+            int rhs = computeConstMulExp(ctx.mulExp(i));
+            String op = ctx.getChild(2 * i - 1).getText();
+            if (op.equals("+")) acc += rhs;
+            else acc -= rhs;
+        }
+        return acc;
+    }
+
+    private int computeConstMulExp(SysYParser.MulExpContext ctx)
+    {
+        int acc = computeConstUnaryExp(ctx.unaryExp(0));
+        for (int i = 1; i < ctx.unaryExp().size(); i++)
+        {
+            int rhs = computeConstUnaryExp(ctx.unaryExp(i));
+            String op = ctx.getChild(2 * i - 1).getText();
+            switch (op)
+            {
+                case "*":
+                    acc *= rhs;
+                    break;
+                case "/":
+                    acc /= rhs;
+                    break;
+                case "%":
+                    acc %= rhs;
+                    break;
+            }
+        }
+        return acc;
+    }
+
+    private int computeConstUnaryExp(SysYParser.UnaryExpContext ctx)
+    {
+        if (ctx.primaryExp() != null)
+        {
+            return computeConstPrimaryExp(ctx.primaryExp());
+        }
+        if (ctx.unaryOp() != null)
+        {
+            int v = computeConstUnaryExp(ctx.unaryExp());
+            switch (ctx.unaryOp().getText())
+            {
+                case "+":
+                    return +v;
+                case "-":
+                    return -v;
+                // 常量折叠里一般不会出现 '!'，如果出现可以抛异常或处理
+            }
+        }
+        // 不应该到这里
+        throw new IllegalStateException("Unexpected ConstUnaryExp");
+    }
+
+    private int computeConstPrimaryExp(SysYParser.PrimaryExpContext ctx)
+    {
+        if (ctx.INTEGER_CONST() != null)
+        {
+            String text = ctx.INTEGER_CONST().getText();
+            if (text.startsWith("0x") || text.startsWith("0X")) return Integer.parseUnsignedInt(text.substring(2), 16);
+            if (text.startsWith("0") && text.length() > 1) return Integer.parseUnsignedInt(text.substring(1), 8);
+            return Integer.parseInt(text);
+        }
+        if (ctx.lVal() != null)
+        {
+            // 从符号表里拿到全局常量的初始化器
+            // 假设 globalScope.find(name) 返回的 Value 是一个 GlobalVariable
+            GlobalVariable gv = (GlobalVariable) globalScope.find(ctx.lVal().IDENT().getText());
+            Constant c = gv.getInitializer().unwrap();
+            String lit = c.getAsString().substring(4);          // 有时会直接是 "2"
+            int v = Integer.parseInt(lit);
+            return v;
+        }
+        if (ctx.exp() != null)
+        {
+            return computeConstAddExp(ctx.exp().addExp());
+        }
+        throw new IllegalStateException("Unexpected ConstPrimaryExp");
     }
 
 }

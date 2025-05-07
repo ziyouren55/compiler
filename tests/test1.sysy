@@ -1,17 +1,9 @@
-int counter = 3;
-
-int change() {
-    counter = counter - 1;
-    return counter;
-}
-
-int main() {
-    int a = 0;
-    int b = 1;
-    int c = 1;
-
-    if (a && change() > 0 || b && c) {
-        return counter;
+int main(){
+    int m = 2, n = 0;
+    int res4 = 0;
+    if ((n != 0 && (m / n) > 1) || m == 2) {
+        if ((m * n) == 0 || (m + n) > 5) {
+            res4 = 5;
+        }
     }
-    return 0;
-}//返回3
+}

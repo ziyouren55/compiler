@@ -6,6 +6,7 @@ import org.llvm4j.llvm4j.Module;
 import org.llvm4j.optional.Option;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 
 //java -jar .\lib\antlr-4.9.1-complete.jar -listener -visitor -long-messages .\src\SysYLexer.g4 .\src\SysYParser.g4
@@ -19,17 +20,28 @@ public class Main {
         }
         String source = args[0];
         String output = args[1];
+        String ll_output = "./tests/ll_out/output.ll";
         CharStream input = CharStreams.fromFileName(source);
 
         CommonTokenStream tokens = lexerAnalysis(input);
         SysYParser       parser = new SysYParser(tokens);
         ParseTree        tree   = parser.compUnit();
 
+        // 生成LLVM IR
         LLVMIRVisitor llvmirVisitor = new LLVMIRVisitor();
         llvmirVisitor.visit(tree);
 
         Module module = llvmirVisitor.getMod();
-        module.dump(Option.of(new File(output)));
+        module.dump(Option.of(new File(ll_output)));
+
+        // 生成RISC-V汇编代码
+        RISCVCGVisitor riscvVisitor = new RISCVCGVisitor(module);
+        String asmCode = riscvVisitor.generateCode();
+
+        // 写入输出文件
+        try (FileWriter writer = new FileWriter(output)) {
+            writer.write(asmCode);
+        }
 
     }
 

@@ -20,7 +20,6 @@ class SymbolTableLLVM {
         }
     }
 
-
     public void put(String name, Value value) {
         table.put(name, value);
     }
@@ -33,13 +32,11 @@ class SymbolTableLLVM {
         return value;
     }
 
-    public Value localFind(String name)
-    {
+    public Value localFind(String name) {
         return table.get(name);
     }
 
-    public SymbolTableLLVM getParent()
-    {
+    public SymbolTableLLVM getParent() {
         return parent;
     }
 }

@@ -105,7 +105,7 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
         if (curScope == globalScope)
         {
             // 如果当前作用域是全局作用域，处理为全局常量
-            var globalVar = mod.addGlobalVariable(constName, i32, Option.empty()).unwrap();
+            GlobalVariable globalVar = mod.addGlobalVariable(constName, i32, Option.empty()).unwrap();
             globalVar.setInitializer((Constant) constInitValue);
             globalScope.put(constName, globalVar); // 保存到全局符号表
             log("Defined global constant: " + constName);
@@ -155,7 +155,7 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
          // 2. 如果 currentFunction==null，就当做全局变量处理
         if (currentFunction == null) {
             // a) 在模块里添加全局变量
-            var gVar = mod
+            GlobalVariable gVar = mod
               .addGlobalVariable(varName, context.getInt32Type(), Option.empty())
               .unwrap();
             // b) 设置初始值

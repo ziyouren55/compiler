@@ -1,0 +1,215 @@
+import java.util.List;
+
+public class AsmBuilder {
+    private StringBuilder asm;
+    private int labelCounter;
+
+    public AsmBuilder() {
+        this.asm = new StringBuilder();
+        this.labelCounter = 0;
+    }
+
+    public String emitGlobalConstant(String name, String value) {
+        return String.format(".section .rodata\n" +
+                ".align 2\n" +
+                ".global %s\n" +
+                "%s:\n" +
+                "    .word %s\n", name, name, value);
+    }
+
+    public String emitGlobalVariable(String name, String value) {
+        return String.format("    .data\n%s:\n    .word %s\n", name, value);
+    }
+
+    public String emitLocalConstant(String name, String value, String reg) {
+        return String.format("    li %s, %s\n", reg, value);
+    }
+
+    public String emitLocalVariable(String name, String value, String reg) {
+        return String.format("    li %s, %s\n", reg, value);
+    }
+
+    public String emitFunction(String name, String body) {
+        return String.format(".text\n.global %s\n%s:\n%s", name, name, body);
+    }
+
+    public String emitParameter(String name, String reg) {
+        return String.format("    mv %s, a0\n", reg);
+    }
+
+    public String emitAssignment(String lval, String exp) {
+        return String.format("    mv %s, %s\n", lval, exp);
+    }
+
+    public String emitIfStatement(String cond, String thenBlock, String elseBlock) {
+        String elseLabel = genLabel("else");
+        String endLabel = genLabel("endif");
+
+        StringBuilder asm = new StringBuilder();
+        asm.append(String.format("    beqz %s, %s\n", cond, elseLabel));
+        asm.append(thenBlock);
+        if (elseBlock != null) {
+            asm.append(String.format("    j %s\n", endLabel));
+            asm.append(String.format("%s:\n", elseLabel));
+            asm.append(elseBlock);
+            asm.append(String.format("%s:\n", endLabel));
+        } else {
+            asm.append(String.format("%s:\n", elseLabel));
+        }
+        return asm.toString();
+    }
+
+    public String emitWhileStatement(String cond, String body) {
+        String startLabel = genLabel("while_start");
+        String endLabel = genLabel("while_end");
+
+        StringBuilder asm = new StringBuilder();
+        asm.append(String.format("%s:\n", startLabel));
+        asm.append(String.format("    beqz %s, %s\n", cond, endLabel));
+        asm.append(body);
+        asm.append(String.format("    j %s\n", startLabel));
+        asm.append(String.format("%s:\n", endLabel));
+        return asm.toString();
+    }
+
+    public String emitReturn(String value) {
+        if (value == null) {
+            return "  ret\n";
+        } else {
+            return String.format("  mv a0, %s\n  ret\n", value);
+        }
+    }
+
+
+    public String emitMainReturn(String value) {
+        StringBuilder sb = new StringBuilder();
+        // 加载返回值到 a0
+        if (value != null) {
+            sb.append(String.format("    li a0, %s\n", value));
+        }
+        // 加载系统调用号到 a7
+        sb.append("    li a7, 93\n");
+        // 执行系统调用
+        sb.append("    ecall\n");
+        return sb.toString();
+    }
+
+    public String emitLoad(String varName, boolean isConstant) {
+        return String.format("    lw a0, %s\n", varName);
+    }
+
+    public String emitUnaryOperation(String op, String operand) {
+        switch (op) {
+            case "+":
+                return String.format("    mv a0, %s\n", operand);
+            case "-":
+                return String.format("    neg a0, %s\n", operand);
+            case "!":
+                return String.format("    seqz a0, %s\n", operand);
+            default:
+                throw new IllegalArgumentException("Unknown unary operator: " + op);
+        }
+    }
+
+    public String emitBinaryOperation(String op, String left, String right) {
+        switch (op) {
+            case "+":
+                return String.format("    add a0, %s, %s\n", left, right);
+            case "-":
+                return String.format("    sub a0, %s, %s\n", left, right);
+            case "*":
+                return String.format("    mul a0, %s, %s\n", left, right);
+            case "/":
+                return String.format("    div a0, %s, %s\n", left, right);
+            case "%":
+                return String.format("    rem a0, %s, %s\n", left, right);
+            default:
+                throw new IllegalArgumentException("Unknown binary operator: " + op);
+        }
+    }
+
+    public String emitComparison(String op, String left, String right) {
+        switch (op) {
+            case "<":
+                return String.format("    slt a0, %s, %s\n", left, right);
+            case ">":
+                return String.format("    slt a0, %s, %s\n", right, left);
+            case "<=":
+                return String.format("    slt a0, %s, %s\n", right, left) +
+                        "    xori a0, a0, 1\n";
+            case ">=":
+                return String.format("    slt a0, %s, %s\n", left, right) +
+                        "    xori a0, a0, 1\n";
+            case "==":
+                return String.format("    xor a0, %s, %s\n", left, right) +
+                        "    seqz a0, a0\n";
+            case "!=":
+                return String.format("    xor a0, %s, %s\n", left, right) +
+                        "    snez a0, a0\n";
+            default:
+                throw new IllegalArgumentException("Unknown comparison operator: " + op);
+        }
+    }
+
+    public String emitLogicalAnd(String left, String right) {
+        return String.format("    and a0, %s, %s\n", left, right);
+    }
+
+    public String emitLogicalOr(String left, String right) {
+        return String.format("    or a0, %s, %s\n", left, right);
+    }
+
+    public String emitFunctionCall(String funcName, List<String> args) {
+        StringBuilder asm = new StringBuilder();
+        for (int i = 0; i < args.size(); i++) {
+            asm.append(String.format("    mv a%d, %s\n", i, args.get(i)));
+        }
+        asm.append(String.format("    call %s\n", funcName));
+        return asm.toString();
+    }
+
+    public String emitStackFrame(int size) {
+        return String.format("    addi sp, sp, -%d\n", size);
+    }
+
+    public String emitStackFrameRestore(int size) {
+        return String.format("    addi sp, sp, %d\n", size);
+    }
+
+    public String emitStore(String value, String offset) {
+        return String.format("    sw %s, %s(sp)\n", value, offset);
+    }
+
+    public String emitLoad(String dest, String offset) {
+        return String.format("    lw %s, %s(sp)\n", dest, offset);
+    }
+
+    public String emitBinaryOperation(String op, String dest, String src1, String src2) {
+        switch (op) {
+            case "add":
+                return String.format("    add %s, %s, %s\n", dest, src1, src2);
+            case "sub":
+                return String.format("    sub %s, %s, %s\n", dest, src1, src2);
+            case "mul":
+                return String.format("    mul %s, %s, %s\n", dest, src1, src2);
+            default:
+                throw new IllegalArgumentException("Unknown operation: " + op);
+        }
+    }
+
+    public String emitLoadImmediate(String reg, String value) {
+        return String.format("    li %s, %s\n", reg, value);
+    }
+
+    public String emitSystemCall() {
+        return "    ecall\n";
+    }
+
+    private String genLabel(String prefix) {
+        return prefix + "_" + (labelCounter++);
+    }
+
+    public String getAsm() {
+        return asm.toString();
+    }
+}

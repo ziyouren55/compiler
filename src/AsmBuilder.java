@@ -80,7 +80,6 @@ public class AsmBuilder {
         }
     }
 
-
     public String emitMainReturn(String value) {
         StringBuilder sb = new StringBuilder();
         // 加载返回值到 a0
@@ -192,6 +191,14 @@ public class AsmBuilder {
                 return String.format("    sub %s, %s, %s\n", dest, src1, src2);
             case "mul":
                 return String.format("    mul %s, %s, %s\n", dest, src1, src2);
+            case "div":
+                return String.format("    div %s, %s, %s\n", dest, src1, src2);
+            case "divu":
+                return String.format("    divu %s, %s, %s\n", dest, src1, src2);
+            case "rem":
+                return String.format("    rem %s, %s, %s\n", dest, src1, src2);
+            case "remu":
+                return String.format("    remu %s, %s, %s\n", dest, src1, src2);
             default:
                 throw new IllegalArgumentException("Unknown operation: " + op);
         }

@@ -32,7 +32,7 @@ public class Main {
         llvmirVisitor.visit(tree);
 
         Module module = llvmirVisitor.getMod();
-//        module.dump(Option.of(new File(ll_output)));
+        module.dump(Option.of(new File(ll_output)));
 
         // 生成RISC-V汇编代码
         RISCVCGVisitor riscvVisitor = new RISCVCGVisitor(module);

@@ -1,4 +1,5 @@
 const int a = 1;
+const int b = a + 1;
 
 int main(){
     int b = 2;

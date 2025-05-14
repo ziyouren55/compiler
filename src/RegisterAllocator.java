@@ -1,25 +1,10 @@
 import java.util.*;
-import org.llvm4j.llvm4j.Value;
 
 public class RegisterAllocator {
     private final List<String> availableRegisters;
     private final Map<String, String> variableToRegister;
     private final Stack<String> savedRegisters;
-    private final Map<String, LiveRange> liveRanges; // 记录变量的活跃区间
     private final Map<String, Integer> lastUse; // 记录变量的最后使用位置
-
-    // 活跃区间类
-    private static class LiveRange {
-        int start; // 开始位置
-        int end; // 结束位置
-        String reg; // 分配的寄存器
-
-        LiveRange(int start) {
-            this.start = start;
-            this.end = start;
-            this.reg = null;
-        }
-    }
 
     public RegisterAllocator() {
         // 初始化可用寄存器列表（t0-t6, s0-s11）
@@ -33,27 +18,14 @@ public class RegisterAllocator {
 
         this.variableToRegister = new HashMap<>();
         this.savedRegisters = new Stack<>();
-        this.liveRanges = new HashMap<>();
         this.lastUse = new HashMap<>();
-    }
-
-    // 记录变量的定义位置
-    public void defineVariable(String varName, int position) {
-        if (!liveRanges.containsKey(varName)) {
-            liveRanges.put(varName, new LiveRange(position));
-        }
     }
 
     // 记录变量的使用位置
     public void useVariable(String varName, int position) {
-        LiveRange range = liveRanges.get(varName);
-        if (range != null) {
-            range.end = position;
-        }
         lastUse.put(varName, position);
     }
 
-    // 分配寄存器
     public String allocateRegister(String varName, int currentPosition) {
         // 如果变量已经有分配的寄存器，直接返回
         String existingReg = variableToRegister.get(varName);
@@ -84,8 +56,6 @@ public class RegisterAllocator {
             // 溢出变量
             if (spilledVar != null) {
                 variableToRegister.remove(spilledVar);
-                // 这里应该生成溢出代码，将寄存器内容保存到栈上
-                // TODO: 生成溢出代码
             }
 
             // 分配寄存器给新变量
@@ -127,8 +97,7 @@ public class RegisterAllocator {
 
     public void freeRegister(String reg) {
         if (!variableToRegister.containsValue(reg)) {
-            // 将释放的寄存器放回可用列表的开头
-            availableRegisters.add(0, reg);
+            availableRegisters.add(0, reg); // 将释放的寄存器放回可用列表的开头
             savedRegisters.remove(reg);
         }
     }
@@ -144,5 +113,4 @@ public class RegisterAllocator {
     public int getStackSize() {
         return savedRegisters.size() * 4; // 每个寄存器占用4字节
     }
-
 }

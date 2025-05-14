@@ -34,6 +34,7 @@ public class RISCVCGVisitor {
                 if (LLVMIsAConstantInt(initValue) != null) {
                     long constValue = LLVMConstIntGetSExtValue(initValue);
                     asmCode.append(asmBuilder.emitGlobalVariable(name, String.valueOf(constValue)));
+                    memoryAllocator.addGlobalVariable(name);
                 }
             }
         }
@@ -73,7 +74,6 @@ public class RISCVCGVisitor {
                                 LLVMValueRef value = LLVMGetOperand(inst, 0);
                                 LLVMValueRef ptr = LLVMGetOperand(inst, 1);
                                 String ptrName = LLVMGetValueName(ptr).getString();
-                                int storeOffset = memoryAllocator.getVariableOffset(ptrName);
 
                                 // 判断是否是常量
                                 if (LLVMIsAConstantInt(value) != null) {
@@ -81,7 +81,14 @@ public class RISCVCGVisitor {
                                     long constValue = LLVMConstIntGetSExtValue(value);
                                     String tempReg = registerAllocator.allocateRegister("temp", currentPosition);
                                     asmCode.append(asmBuilder.emitLoadImmediate(tempReg, String.valueOf(constValue)));
-                                    asmCode.append(asmBuilder.emitStore(tempReg, String.valueOf(storeOffset)));
+
+                                    if (LLVMIsAGlobalVariable(ptr) != null) {
+                                        asmCode.append(asmBuilder.emitStoreGlobal(tempReg, ptrName));
+                                    } else {
+                                        int storeOffset = memoryAllocator.getVariableOffset(ptrName);
+                                        asmCode.append(asmBuilder.emitStore(tempReg, String.valueOf(storeOffset)));
+                                    }
+
                                     registerAllocator.freeRegister(tempReg);
                                 } else {
                                     // 如果不是常量，获取值所在的寄存器
@@ -90,11 +97,24 @@ public class RISCVCGVisitor {
                                     if (valueReg == null) {
                                         // 如果变量没有分配寄存器，分配一个并加载值
                                         valueReg = registerAllocator.allocateRegister(valueName, currentPosition);
-                                        asmCode.append(asmBuilder.emitLoad(valueReg,
-                                                String.valueOf(memoryAllocator.getVariableOffset(valueName))));
+                                        if (LLVMIsAGlobalVariable(value) != null) {
+                                            // 如果是全局变量，使用 la 和 lw 指令
+                                            asmCode.append(asmBuilder.emitLoadGlobal(valueReg, valueName));
+                                        } else {
+                                            // 如果是局部变量，使用 lw 指令从栈上加载
+                                            int loadOffset = memoryAllocator.getVariableOffset(valueName);
+                                            asmCode.append(asmBuilder.emitLoad(valueReg, String.valueOf(loadOffset)));
+                                        }
                                         registerAllocator.mapVariableToRegister(valueName, valueReg);
                                     }
-                                    asmCode.append(asmBuilder.emitStore(valueReg, String.valueOf(storeOffset)));
+
+                                    if (LLVMIsAGlobalVariable(ptr) != null) {
+                                        asmCode.append(asmBuilder.emitStoreGlobal(valueReg, ptrName));
+                                    } else {
+                                        int storeOffset = memoryAllocator.getVariableOffset(ptrName);
+                                        asmCode.append(asmBuilder.emitStore(valueReg, String.valueOf(storeOffset)));
+                                    }
+
                                     registerAllocator.freeRegister(valueReg);
                                     registerAllocator.mapVariableToRegister(valueName, null);
                                 }
@@ -106,11 +126,20 @@ public class RISCVCGVisitor {
                                 LLVMValueRef ptr = LLVMGetOperand(inst, 0);
                                 String ptrName = LLVMGetValueName(ptr).getString();
                                 String resultName = LLVMGetValueName(inst).getString();
-                                int loadOffset = memoryAllocator.getVariableOffset(ptrName);
 
                                 // 为结果分配寄存器
                                 String resultReg = registerAllocator.allocateRegister(resultName, currentPosition);
-                                asmCode.append(asmBuilder.emitLoad(resultReg, String.valueOf(loadOffset)));
+
+                                // 使用 LLVMIsAGlobalVariable 判断是否是全局变量
+                                if (LLVMIsAGlobalVariable(ptr) != null) {
+                                    // 如果是全局变量，使用 la 和 lw 指令
+                                    asmCode.append(asmBuilder.emitLoadGlobal(resultReg, ptrName));
+                                } else {
+                                    // 如果是局部变量，使用 lw 指令从栈上加载
+                                    int loadOffset = memoryAllocator.getVariableOffset(ptrName);
+                                    asmCode.append(asmBuilder.emitLoad(resultReg, String.valueOf(loadOffset)));
+                                }
+
                                 registerAllocator.mapVariableToRegister(resultName, resultReg);
                             }
                             break;
@@ -135,10 +164,15 @@ public class RISCVCGVisitor {
                                     op1Reg = registerAllocator.allocateRegister(op1Name, currentPosition);
                                     op1IsTemp = true;
                                     if (LLVMIsAConstantInt(op1) != null) {
+                                        // 如果是常量
                                         long constValue = LLVMConstIntGetSExtValue(op1);
                                         asmCode.append(
                                                 asmBuilder.emitLoadImmediate(op1Reg, String.valueOf(constValue)));
+                                    } else if (memoryAllocator.isGlobalVariable(op1Name)) {
+                                        // 如果是全局变量
+                                        asmCode.append(asmBuilder.emitLoadGlobal(op1Reg, op1Name));
                                     } else {
+                                        // 如果是局部变量
                                         asmCode.append(asmBuilder.emitLoad(op1Reg,
                                                 String.valueOf(memoryAllocator.getVariableOffset(op1Name))));
                                     }
@@ -153,10 +187,15 @@ public class RISCVCGVisitor {
                                     op2Reg = registerAllocator.allocateRegister(op2Name, currentPosition);
                                     op2IsTemp = true;
                                     if (LLVMIsAConstantInt(op2) != null) {
+                                        // 如果是常量
                                         long constValue = LLVMConstIntGetSExtValue(op2);
                                         asmCode.append(
                                                 asmBuilder.emitLoadImmediate(op2Reg, String.valueOf(constValue)));
+                                    } else if (memoryAllocator.isGlobalVariable(op2Name)) {
+                                        // 如果是全局变量
+                                        asmCode.append(asmBuilder.emitLoadGlobal(op2Reg, op2Name));
                                     } else {
+                                        // 如果是局部变量
                                         asmCode.append(asmBuilder.emitLoad(op2Reg,
                                                 String.valueOf(memoryAllocator.getVariableOffset(op2Name))));
                                     }

@@ -212,6 +212,14 @@ public class AsmBuilder {
         return "    ecall\n";
     }
 
+    public String emitLoadGlobal(String reg, String varName) {
+        return String.format("    la %s, %s\n    lw %s, 0(%s)\n", reg, varName, reg, reg);
+    }
+
+    public String emitStoreGlobal(String reg, String varName) {
+        return String.format("    la t6, %s\n    sw %s, 0(t6)\n", varName, reg);
+    }
+
     private String genLabel(String prefix) {
         return prefix + "_" + (labelCounter++);
     }

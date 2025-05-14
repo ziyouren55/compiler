@@ -1,11 +1,8 @@
 const int a = 1;
-const int b = a + 1;
-
+int b;
 int main(){
-    int b = 2;
     int c = 3;
-    int d = c / 3;
-    int e;
-    e = 5 % b;
-    return b + c;
+    b = c + a + 1;
+    const int d = 10;
+    return a + b + c + d;
 }

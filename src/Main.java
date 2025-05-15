@@ -10,7 +10,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 
 //java -jar .\lib\antlr-4.9.1-complete.jar -listener -visitor -long-messages .\src\SysYLexer.g4 .\src\SysYParser.g4
-
+//java -jar rars.jar tests/output.asm a0
 public class Main {
 
     public static void main(String[] args) throws IOException

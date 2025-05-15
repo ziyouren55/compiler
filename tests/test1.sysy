@@ -1,8 +1,6 @@
-const int a = 1;
-int b;
-int main(){
-    int c = 3;
-    b = c + a + 1;
-    const int d = 10;
-    return a + b + c + d;
+int globalVar = 100;
+
+int main() {
+    int localVar = globalVar + 50;
+    return localVar;
 }

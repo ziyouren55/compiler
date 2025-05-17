@@ -1,6 +1,16 @@
-int globalVar = 100;
+int x = 56;
+int y = 98;
 
 int main() {
-    int localVar = globalVar + 50;
-    return localVar;
+    int a = x;
+    int b = y;
+    while (b != 0) {
+        if (a > b) {
+            a = a - b;
+        } else {
+            b = b - a;
+        }
+    }
+    int result = a;
+	return result;
 }

@@ -1,116 +1,110 @@
 import java.util.*;
 
 public class RegisterAllocator {
-    private final List<String> availableRegisters;
-    private final Map<String, String> variableToRegister;
-    private final Stack<String> savedRegisters;
-    private final Map<String, Integer> lastUse; // 记录变量的最后使用位置
+    private static class LiveInterval {
+        final String varName;
+        final int start;
+        final int end;
+        String register;
+        String spillLocation;
+
+        LiveInterval(String varName, int start, int end) {
+            this.varName = varName;
+            this.start = start;
+            this.end = end;
+        }
+    }
+
+    private final List<String> availableRegisters = new ArrayList<>();
+    private final Map<String, LiveInterval> intervals = new HashMap<>();
+    private final PriorityQueue<LiveInterval> active = new PriorityQueue<>(
+        Comparator.comparingInt((LiveInterval i) -> i.end)
+            .thenComparing(i -> i.varName)  // 二级排序确保稳定性
+    );
+    private int stackOffset = 0;
 
     public RegisterAllocator() {
-        // 初始化可用寄存器列表（t0-t6, s0-s11）
-        this.availableRegisters = new ArrayList<>();
-        for (int i = 0; i < 7; i++) {
+        // 初始化寄存器列表 (t0-t6, s0-s11)
+        for (int i = 0; i < 5; i++)
             availableRegisters.add("t" + i);
-        }
-        for (int i = 0; i < 12; i++) {
+        for (int i = 0; i < 12; i++)
             availableRegisters.add("s" + i);
-        }
-
-        this.variableToRegister = new HashMap<>();
-        this.savedRegisters = new Stack<>();
-        this.lastUse = new HashMap<>();
+        for (int i = 1; i < 7; i++)
+            availableRegisters.add("a" + i);
     }
 
-    // 记录变量的使用位置
-    public void useVariable(String varName, int position) {
-        lastUse.put(varName, position);
+    public void addInterval(String varName, int start, int end) {
+        intervals.put(varName, new LiveInterval(varName, start, end));
     }
 
-    public String allocateRegister(String varName, int currentPosition) {
-        // 如果变量已经有分配的寄存器，直接返回
-        String existingReg = variableToRegister.get(varName);
-        if (existingReg != null) {
-            return existingReg;
-        }
+    public void allocate() {
+        List<LiveInterval> sorted = new ArrayList<>(intervals.values());
+        sorted.sort(Comparator.comparingInt(i -> i.start));
 
-        // 如果有可用寄存器，直接分配
-        if (!availableRegisters.isEmpty()) {
-            String reg = availableRegisters.remove(0);
-            variableToRegister.put(varName, reg);
-            savedRegisters.push(reg);
-            return reg;
-        }
+        for (LiveInterval current : sorted) {
+            expireOldIntervals(current.start);
 
-        // 如果没有可用寄存器，需要选择一个寄存器进行溢出
-        String regToSpill = findRegisterToSpill(currentPosition);
-        if (regToSpill != null) {
-            // 找到使用这个寄存器的变量
-            String spilledVar = null;
-            for (Map.Entry<String, String> entry : variableToRegister.entrySet()) {
-                if (entry.getValue().equals(regToSpill)) {
-                    spilledVar = entry.getKey();
-                    break;
+            if (availableRegisters.isEmpty()) {
+                // 获取最早结束的活跃区间
+                LiveInterval spill = active.peek();
+
+                if (spill.end > current.end) {
+                    // 溢出当前区间
+                    current.register = spill.register;
+                    spillCurrent(current);
+                } else {
+                    // 溢出已存在的区间
+                    active.poll();
+                    spillInterval(spill);
+                    assignRegister(current);
+                    active.offer(current);
                 }
-            }
-
-            // 溢出变量
-            if (spilledVar != null) {
-                variableToRegister.remove(spilledVar);
-            }
-
-            // 分配寄存器给新变量
-            variableToRegister.put(varName, regToSpill);
-            return regToSpill;
-        }
-
-        throw new RuntimeException("No available registers and cannot spill");
-    }
-
-    // 查找可以溢出的寄存器
-    private String findRegisterToSpill(int currentPosition) {
-        String bestReg = null;
-        int furthestUse = -1;
-
-        // 遍历所有已分配的寄存器
-        for (String reg : savedRegisters) {
-            // 找到使用这个寄存器的变量
-            String varName = null;
-            for (Map.Entry<String, String> entry : variableToRegister.entrySet()) {
-                if (entry.getValue().equals(reg)) {
-                    varName = entry.getKey();
-                    break;
-                }
-            }
-
-            if (varName != null) {
-                // 获取变量的最后使用位置
-                Integer lastUsePos = lastUse.get(varName);
-                if (lastUsePos != null && lastUsePos > furthestUse) {
-                    furthestUse = lastUsePos;
-                    bestReg = reg;
-                }
+            } else {
+                assignRegister(current);
+                active.offer(current);
             }
         }
-
-        return bestReg;
     }
 
-    public void freeRegister(String reg) {
-        if (!variableToRegister.containsValue(reg)) {
-            availableRegisters.add(0, reg); // 将释放的寄存器放回可用列表的开头
-            savedRegisters.remove(reg);
+    private void expireOldIntervals(int position) {
+        while (!active.isEmpty()) {
+            LiveInterval interval = active.peek();
+            if (interval.end > position) {  // 严格大于时停止
+                break;
+            }
+            active.poll();
+            availableRegisters.add(interval.register);
         }
     }
 
-    public void mapVariableToRegister(String varName, String reg) {
-        variableToRegister.put(varName, reg);
+    private void assignRegister(LiveInterval interval) {
+        interval.register = availableRegisters.remove(0);
     }
 
-    public String getRegisterForVariable(String varName) {
-        return variableToRegister.get(varName);
+    private void spillCurrent(LiveInterval interval) {
+        interval.spillLocation = "" + stackOffset;
+        stackOffset += 4;
+    }
+
+    private void spillInterval(LiveInterval interval) {
+        interval.spillLocation = "" + stackOffset;
+        stackOffset += 4;
+        availableRegisters.add(interval.register);
+        interval.register = null;
+    }
+
+    // 以下为访问方法
+    public String getRegister(String varName) {
+        LiveInterval interval = intervals.get(varName);
+        return interval != null ? interval.register : null;
+    }
+
+    public String getSpillLocation(String varName) {
+        LiveInterval interval = intervals.get(varName);
+        return interval != null ? interval.spillLocation : null;
     }
 
     public int getStackSize() {
-        return savedRegisters.size() * 4; // 每个寄存器占用4字节
+        return stackOffset;
     }
 }

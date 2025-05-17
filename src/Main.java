@@ -2,6 +2,7 @@ import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.tree.ParseTree;
+import org.bytedeco.llvm.LLVM.LLVMModuleRef;
 import org.llvm4j.llvm4j.Module;
 import org.llvm4j.optional.Option;
 
@@ -21,6 +22,7 @@ public class Main {
         String source = args[0];
         String output = args[1];
         String ll_output = "./tests/ll_out/output.ll";
+        String op_ll_output = "./tests/ll_out/op_output.ll";
         CharStream input = CharStreams.fromFileName(source);
 
         CommonTokenStream tokens = lexerAnalysis(input);
@@ -32,7 +34,11 @@ public class Main {
         llvmirVisitor.visit(tree);
 
         Module module = llvmirVisitor.getMod();
-//        module.dump(Option.of(new File(ll_output)));
+        module.dump(Option.of(new File(ll_output)));
+        LLVMOptimizer llvmOptimizer = new LLVMOptimizer(module.getRef());
+        LLVMModuleRef opMod = llvmOptimizer.optimize();
+        module = new Module(opMod);
+        module.dump(Option.of(new File(op_ll_output)));
 
         // 生成RISC-V汇编代码
         RISCVCGVisitor riscvVisitor = new RISCVCGVisitor(module);

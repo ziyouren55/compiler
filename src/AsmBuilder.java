@@ -74,9 +74,9 @@ public class AsmBuilder {
 
     public String emitReturn(String value) {
         if (value == null) {
-            return "  ret\n";
+            return "    ret\n";
         } else {
-            return String.format("  mv a0, %s\n  ret\n", value);
+            return String.format("    mv a0, %s\n    ret\n", value);
         }
     }
 
@@ -226,5 +226,86 @@ public class AsmBuilder {
 
     public String getAsm() {
         return asm.toString();
+    }
+
+    /**
+     * 生成相等比较指令
+     */
+    public String emitEqual(String dest, String src1, String src2) {
+        StringBuilder code = new StringBuilder();
+        code.append(String.format("    xor %s, %s, %s\n", dest, src1, src2));
+        code.append(String.format("    seqz %s, %s\n", dest, dest));
+        return code.toString();
+    }
+
+    /**
+     * 生成不等比较指令
+     */
+    public String emitNotEqual(String dest, String src1, String src2) {
+        StringBuilder code = new StringBuilder();
+        code.append(String.format("    xor %s, %s, %s\n", dest, src1, src2));
+        code.append(String.format("    snez %s, %s\n", dest, dest));
+        return code.toString();
+    }
+
+    /**
+     * 生成小于比较指令
+     */
+    public String emitLessThan(String dest, String src1, String src2) {
+        return String.format("    slt %s, %s, %s\n", dest, src1, src2);
+    }
+
+    /**
+     * 生成大于比较指令
+     */
+    public String emitGreaterThan(String dest, String src1, String src2) {
+        return String.format("    slt %s, %s, %s\n", dest, src2, src1);
+    }
+
+    /**
+     * 生成小于等于比较指令
+     */
+    public String emitLessEqual(String dest, String src1, String src2) {
+        StringBuilder code = new StringBuilder();
+        code.append(String.format("    slt %s, %s, %s\n", dest, src2, src1));
+        code.append(String.format("    xori %s, %s, 1\n", dest, dest));
+        return code.toString();
+    }
+
+    /**
+     * 生成大于等于比较指令
+     */
+    public String emitGreaterEqual(String dest, String src1, String src2) {
+        StringBuilder code = new StringBuilder();
+        code.append(String.format("    slt %s, %s, %s\n", dest, src1, src2));
+        code.append(String.format("    xori %s, %s, 1\n", dest, dest));
+        return code.toString();
+    }
+
+    /**
+     * 生成条件跳转指令（不为零则跳转）
+     */
+    public String emitBranchNotZero(String cond, String targetLabel) {
+        return String.format("    bnez %s, %s\n", cond, targetLabel);
+    }
+
+    /**
+     * 生成条件跳转指令（为零则跳转）
+     */
+    public String emitBranchZero(String cond, String targetLabel) {
+        return String.format("    beqz %s, %s\n", cond, targetLabel);
+    }
+
+    /**
+     * 生成无条件跳转指令
+     */
+    public String emitJump(String targetLabel) {
+        return String.format("    j %s\n", targetLabel);
+    }
+
+    // 处理zext指令 - 在RISC-V中可能不需要额外指令，只需移动即可
+    public String emitZeroExtend(String dest, String src) {
+        // 在RISC-V中，布尔值已经是整数，可能只需要复制
+        return String.format("    mv %s, %s\n", dest, src);
     }
 }

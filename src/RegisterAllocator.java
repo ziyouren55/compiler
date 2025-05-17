@@ -18,16 +18,17 @@ public class RegisterAllocator {
     private final List<String> availableRegisters = new ArrayList<>();
     private final Map<String, LiveInterval> intervals = new HashMap<>();
     private final PriorityQueue<LiveInterval> active = new PriorityQueue<>(
-        Comparator.comparingInt((LiveInterval i) -> i.end)
-            .thenComparing(i -> i.varName)  // 二级排序确保稳定性
+            Comparator.comparingInt((LiveInterval i) -> i.end)
+                    .thenComparing(i -> i.varName) // 二级排序确保稳定性
     );
     private int stackOffset = 0;
+    private int baseOffset = 0; // 基准偏移量
 
     public RegisterAllocator() {
         // 初始化寄存器列表 (t0-t6, s0-s11)
         for (int i = 0; i < 4; i++)
             availableRegisters.add("t" + i);
-        for (int i = 0; i < 12; i++)
+        for (int i = 0; i < 7; i++)
             availableRegisters.add("s" + i);
         for (int i = 1; i < 7; i++)
             availableRegisters.add("a" + i);
@@ -49,11 +50,11 @@ public class RegisterAllocator {
                 LiveInterval spill = active.peek();
 
                 if (spill.end > current.end) {
-                    // 溢出当前区间
-                    current.register = spill.register;
+                    // 溢出当前区间 - 不分配寄存器，直接存入栈
                     spillCurrent(current);
+                    // 不添加到活跃队列，因为它不占用寄存器
                 } else {
-                    // 溢出已存在的区间
+                    // 溢出已存在区间的逻辑，这部分是正确的
                     active.poll();
                     spillInterval(spill);
                     assignRegister(current);
@@ -69,7 +70,7 @@ public class RegisterAllocator {
     private void expireOldIntervals(int position) {
         while (!active.isEmpty()) {
             LiveInterval interval = active.peek();
-            if (interval.end > position) {  // 严格大于时停止
+            if (interval.end > position) { // 严格大于时停止
                 break;
             }
             active.poll();
@@ -82,12 +83,13 @@ public class RegisterAllocator {
     }
 
     private void spillCurrent(LiveInterval interval) {
-        interval.spillLocation = "" + stackOffset;
+        interval.spillLocation = "" + (baseOffset + stackOffset);
+        interval.register = null; // 显式清除寄存器分配
         stackOffset += 4;
     }
 
     private void spillInterval(LiveInterval interval) {
-        interval.spillLocation = "" + stackOffset;
+        interval.spillLocation = "" + (baseOffset + stackOffset);
         stackOffset += 4;
         availableRegisters.add(interval.register);
         interval.register = null;
@@ -106,5 +108,10 @@ public class RegisterAllocator {
 
     public int getStackSize() {
         return stackOffset;
+    }
+
+    // 添加一个方法来设置基准偏移量
+    public void setBaseOffset(int offset) {
+        this.baseOffset = offset;
     }
 }

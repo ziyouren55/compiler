@@ -43,4 +43,8 @@ public class MemoryRegisterAllocator {
         currentOffset = 0;
     }
 
+    public int getCurrentOffset() {
+        return currentOffset;
+    }
+
 }

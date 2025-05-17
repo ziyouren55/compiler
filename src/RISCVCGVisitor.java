@@ -53,8 +53,15 @@ public class RISCVCGVisitor {
             memoryAllocator.reset();
             currentPosition = 0;
 
+            // 先扫描所有局部变量
+            scanLocalVariables(func);
+            int localVarsSize = memoryAllocator.getCurrentOffset();
+
             // 收集活跃区间
             collectLiveIntervals(func);
+
+            // 设置寄存器分配器的基准偏移量
+            registerAllocator.setBaseOffset(localVarsSize);
 
             // 执行寄存器分配
             registerAllocator.allocate();
@@ -241,16 +248,19 @@ public class RISCVCGVisitor {
                                             }
                                         }
 
-                                        if (LLVMIsAConstantInt(op2) != null) {
+                                        if (LLVMIsAConstantInt(op2) != null)
+                                        {
                                             long constValue = LLVMConstIntGetSExtValue(op2);
                                             String tempReg2 = "t5";
                                             asmCode.append(
-                                                    asmBuilder.emitLoadImmediate(tempReg2, String.valueOf(constValue)));
+                                                asmBuilder.emitLoadImmediate(tempReg2, String.valueOf(constValue)));
                                             asmCode.append(asmBuilder.emitBinaryOperation(getOperation(opcode), tempReg,
-                                                    tempReg, tempReg2));
-                                        } else if (op2Reg != null) {
+                                                tempReg, tempReg2));
+                                        }
+                                        else if (op2Reg != null)
+                                        {
                                             asmCode.append(asmBuilder.emitBinaryOperation(getOperation(opcode), tempReg,
-                                                    tempReg, op2Reg));
+                                                tempReg, op2Reg));
                                         } else {
                                             String op2SpillLoc = registerAllocator.getSpillLocation(op2Name);
                                             if (op2SpillLoc != null) {
@@ -391,10 +401,10 @@ public class RISCVCGVisitor {
                                 String resultReg = registerAllocator.getRegister(resultName);
 
                                 // 加载第一个操作数
-                                String op1Reg = loadOperandToRegister(op1, "t0");
+                                String op1Reg = loadOperandToRegister(op1, "t6");
 
                                 // 加载第二个操作数
-                                String op2Reg = loadOperandToRegister(op2, "t1");
+                                String op2Reg = loadOperandToRegister(op2, "t5");
 
                                 if (resultReg != null) {
                                     // 根据谓词生成相应的比较指令
@@ -424,7 +434,7 @@ public class RISCVCGVisitor {
                                     // 处理溢出到栈的情况
                                     String spillLoc = registerAllocator.getSpillLocation(resultName);
                                     if (spillLoc != null) {
-                                        String tempReg = "t2";
+                                        String tempReg = "t4";
                                         // 根据谓词生成比较指令
                                         switch (predicate) {
                                             case LLVMIntEQ: // ==
@@ -466,7 +476,7 @@ public class RISCVCGVisitor {
                                 String falseBBName = LLVMGetBasicBlockName(falseBlock).getString();
 
                                 // 加载条件值到寄存器
-                                String condReg = loadOperandToRegister(condValue, "t0");
+                                String condReg = loadOperandToRegister(condValue, "t6");
 
                                 // 生成条件跳转指令
                                 asmCode.append(asmBuilder.emitBranchNotZero(condReg, trueBBName));
@@ -488,7 +498,7 @@ public class RISCVCGVisitor {
                                 String resultReg = registerAllocator.getRegister(resultName);
 
                                 // 加载源操作数
-                                String srcReg = loadOperandToRegister(srcValue, "t0");
+                                String srcReg = loadOperandToRegister(srcValue, "t6");
 
                                 if (resultReg != null) {
                                     // 在RISC-V中，i1到i32的扩展可能不需要特殊指令
@@ -497,7 +507,7 @@ public class RISCVCGVisitor {
                                     // 处理溢出情况
                                     String spillLoc = registerAllocator.getSpillLocation(resultName);
                                     if (spillLoc != null) {
-                                        String tempReg = "t1";
+                                        String tempReg = "t5";
                                         asmCode.append(asmBuilder.emitAssignment(tempReg, srcReg));
                                         asmCode.append(asmBuilder.emitStore(tempReg, spillLoc));
                                     }
@@ -531,7 +541,7 @@ public class RISCVCGVisitor {
                     LLVMValueRef operand = LLVMGetOperand(inst, i);
                     if (LLVMIsAConstantInt(operand) == null) {
                         String varName = LLVMGetValueName(operand).getString();
-                        if (varName != null) {
+                        if (!varName.isEmpty()) {
                             // 更新最后使用点
                             varLastUsePoints.put(varName, currentPosition);
                             // 如果是第一次使用，记录为定义点
@@ -545,7 +555,7 @@ public class RISCVCGVisitor {
                 // 收集定义点
                 if (opcode != LLVMStore && opcode != LLVMAlloca) {
                     String varName = LLVMGetValueName(inst).getString();
-                    if (varName != null) {
+                    if (!varName.isEmpty()) {
                         // 更新定义点
                         varDefPoints.put(varName, currentPosition);
                         // 如果是第一次定义，初始化最后使用点
@@ -573,18 +583,23 @@ public class RISCVCGVisitor {
     private int calculateStackSize(LLVMValueRef func) {
         int size = 0;
         // 遍历所有基本块和指令，计算需要的栈空间
-        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
-            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst)) {
-                if (LLVMGetInstructionOpcode(inst) == LLVMAlloca) {
-                    size += 4; // 每个变量分配4字节
-                }
-            }
-        }
+        size += memoryAllocator.getCurrentOffset();
         // 加上寄存器溢出需要的空间
         size += registerAllocator.getStackSize();
         // 按16字节对齐
         return (size + 15) & ~15;
     }
+
+    private void scanLocalVariables(LLVMValueRef func) {
+    for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
+        for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst)) {
+            if (LLVMGetInstructionOpcode(inst) == LLVMAlloca) {
+                String varName = LLVMGetValueName(inst).getString();
+                memoryAllocator.allocateVariable(varName);
+            }
+        }
+    }
+}
 
     private String getOperation(int opcode) {
         switch (opcode) {

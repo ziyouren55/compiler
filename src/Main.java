@@ -34,11 +34,11 @@ public class Main {
         llvmirVisitor.visit(tree);
 
         Module module = llvmirVisitor.getMod();
-//        module.dump(Option.of(new File(ll_output)));
+        module.dump(Option.of(new File(ll_output)));
         LLVMOptimizer llvmOptimizer = new LLVMOptimizer(module.getRef());
         LLVMModuleRef opMod = llvmOptimizer.optimize();
         module = new Module(opMod);
-//        module.dump(Option.of(new File(op_ll_output)));
+        module.dump(Option.of(new File(op_ll_output)));
 
         // 生成RISC-V汇编代码
         RISCVCGVisitor riscvVisitor = new RISCVCGVisitor(module);

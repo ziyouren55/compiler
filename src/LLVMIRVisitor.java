@@ -126,7 +126,16 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     @Override
     public Value visitConstInitVal(SysYParser.ConstInitValContext ctx)
     {
-        return visitConstExp(ctx.constExp());
+        if (curScope == globalScope)
+        {
+            // 全局常量需要编译时计算
+            return visitConstExp(ctx.constExp());
+        }
+        else
+        {
+            // 局部常量使用运行时计算
+            return visitAddExp(ctx.constExp().addExp());
+        }
     }
 
     @Override

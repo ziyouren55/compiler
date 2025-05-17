@@ -1,5 +1,7 @@
 import org.bytedeco.llvm.LLVM.*;
+
 import static org.bytedeco.llvm.global.LLVM.*;
+
 import java.util.*;
 
 /**
@@ -10,7 +12,8 @@ import java.util.*;
  * 3. 常量传播
  * 4. 全局变量更新修复
  */
-public class LLVMOptimizer {
+public class LLVMOptimizer
+{
 
     private LLVMModuleRef module;
     // 存储所有全局变量名，用于在多个方法中共享
@@ -21,7 +24,8 @@ public class LLVMOptimizer {
      *
      * @param module 待优化的LLVM模块
      */
-    public LLVMOptimizer(LLVMModuleRef module) {
+    public LLVMOptimizer(LLVMModuleRef module)
+    {
         this.module = module;
         // 初始化收集所有全局变量
         collectGlobalVariables();
@@ -30,9 +34,11 @@ public class LLVMOptimizer {
     /**
      * 收集模块中的所有全局变量
      */
-    private void collectGlobalVariables() {
+    private void collectGlobalVariables()
+    {
         globalVariables.clear();
-        for (LLVMValueRef global = LLVMGetFirstGlobal(module); global != null; global = LLVMGetNextGlobal(global)) {
+        for (LLVMValueRef global = LLVMGetFirstGlobal(module); global != null; global = LLVMGetNextGlobal(global))
+        {
             String name = LLVMGetValueName(global).getString();
             globalVariables.add(name);
             System.out.println("收集到全局变量: " + name);
@@ -44,12 +50,15 @@ public class LLVMOptimizer {
      *
      * @return 优化后的模块
      */
-    public LLVMModuleRef optimize() {
+    public LLVMModuleRef optimize()
+    {
         // 遍历所有函数进行优化
-        for (LLVMValueRef func = LLVMGetFirstFunction(module); func != null; func = LLVMGetNextFunction(func)) {
+        for (LLVMValueRef func = LLVMGetFirstFunction(module); func != null; func = LLVMGetNextFunction(func))
+        {
 
             // 跳过外部函数
-            if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0) {
+            if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0)
+            {
                 optimizeFunction(func);
                 eliminateDeadStores(func);
                 propagateConstants(func);
@@ -66,7 +75,8 @@ public class LLVMOptimizer {
      *
      * @param func 待优化的函数
      */
-    private void optimizeFunction(LLVMValueRef func) {
+    private void optimizeFunction(LLVMValueRef func)
+    {
         // 用于跟踪内存位置->存储的值的映射
         Map<String, LLVMValueRef> memoryValues = new HashMap<>();
 
@@ -74,29 +84,35 @@ public class LLVMOptimizer {
         Map<LLVMValueRef, LLVMValueRef> replacements = new HashMap<>();
 
         // 第一阶段：遍历所有指令，标识冗余的load操作
-        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
+        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb))
+        {
 
             // 清空memoryValues，基本块边界不进行优化
             memoryValues.clear();
 
-            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst)) {
+            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst))
+            {
 
                 int opcode = LLVMGetInstructionOpcode(inst);
 
-                if (opcode == LLVMStore) {
+                if (opcode == LLVMStore)
+                {
                     // 处理store指令
                     LLVMValueRef value = LLVMGetOperand(inst, 0); // 存储的值
                     LLVMValueRef ptr = LLVMGetOperand(inst, 1); // 目标地址
 
                     String ptrName = LLVMGetValueName(ptr).getString();
                     memoryValues.put(ptrName, value);
-                } else if (opcode == LLVMLoad) {
+                }
+                else if (opcode == LLVMLoad)
+                {
                     // 处理load指令
                     LLVMValueRef ptr = LLVMGetOperand(inst, 0); // 源地址
                     String ptrName = LLVMGetValueName(ptr).getString();
 
                     // 检查是否有最近存储到同一位置的值
-                    if (memoryValues.containsKey(ptrName)) {
+                    if (memoryValues.containsKey(ptrName))
+                    {
                         LLVMValueRef storedValue = memoryValues.get(ptrName);
 
                         // 如果有冲突，我们应该验证没有其他写入操作
@@ -105,12 +121,15 @@ public class LLVMOptimizer {
                         // TODO: 更全面的分析，检查在store和load之间是否有其他写入
                         // 对于简单版本，我们假设可以安全替换
 
-                        if (canReplace) {
+                        if (canReplace)
+                        {
                             // 标记此load为可替换
                             replacements.put(inst, storedValue);
                         }
                     }
-                } else if (opcode == LLVMAlloca) {
+                }
+                else if (opcode == LLVMAlloca)
+                {
                     // 记录局部变量，初始值为未知
                     String varName = LLVMGetValueName(inst).getString();
                     memoryValues.remove(varName); // 确保不会有旧值
@@ -119,7 +138,8 @@ public class LLVMOptimizer {
         }
 
         // 第二阶段：使用收集的信息替换load指令的结果
-        for (Map.Entry<LLVMValueRef, LLVMValueRef> entry : replacements.entrySet()) {
+        for (Map.Entry<LLVMValueRef, LLVMValueRef> entry : replacements.entrySet())
+        {
             LLVMValueRef loadInst = entry.getKey();
             LLVMValueRef value = entry.getValue();
 
@@ -131,7 +151,7 @@ public class LLVMOptimizer {
         }
 
         System.out.println("优化函数 " + LLVMGetValueName(func).getString() +
-                "，消除了 " + replacements.size() + " 个冗余load操作");
+            "，消除了 " + replacements.size() + " 个冗余load操作");
     }
 
     /**
@@ -338,12 +358,7 @@ public class LLVMOptimizer {
             "，消除了 " + deadStores.size() + " 个死存储操作");
     }
 
-    /**
-     * 改进的常量传播优化
-     * 处理循环和跨基本块的变量更新
-     *
-     * @param func 待优化的函数
-     */
+
     private void propagateConstants(LLVMValueRef func)
     {
         // 跟踪变量到常量值的映射
@@ -362,7 +377,13 @@ public class LLVMOptimizer {
         Map<LLVMBasicBlockRef, Set<LLVMBasicBlockRef>> successors = new HashMap<>();
         Map<LLVMBasicBlockRef, Set<LLVMBasicBlockRef>> predecessors = new HashMap<>();
 
-        // 第一阶段：建立基本块的控制流图
+        // 新增：跟踪在条件分支中被赋值的变量
+        Set<String> variablesAssignedInBranches = new HashSet<>();
+
+        // 新增：记录条件分支基本块及其目标
+        Map<LLVMBasicBlockRef, List<LLVMBasicBlockRef>> conditionalBranches = new HashMap<>();
+
+        // 第一阶段：建立基本块的控制流图并收集条件分支信息
         for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb))
         {
             // 获取基本块的终结指令
@@ -389,6 +410,12 @@ public class LLVMOptimizer {
                         // 添加前驱基本块
                         predecessors.computeIfAbsent(trueBlock, k -> new HashSet<>()).add(bb);
                         predecessors.computeIfAbsent(falseBlock, k -> new HashSet<>()).add(bb);
+
+                        // 记录条件分支
+                        List<LLVMBasicBlockRef> targets = new ArrayList<>();
+                        targets.add(trueBlock);
+                        targets.add(falseBlock);
+                        conditionalBranches.put(bb, targets);
                     }
                     // 无条件分支
                     else if (numOperands == 1)
@@ -405,22 +432,29 @@ public class LLVMOptimizer {
             }
         }
 
-        // 第二阶段：标识循环和被修改的变量
-        Set<LLVMBasicBlockRef> loopHeaders = new HashSet<>();
-        for (Map.Entry<LLVMBasicBlockRef, Set<LLVMBasicBlockRef>> entry : predecessors.entrySet())
+        // 收集条件分支中被赋值的变量
+        for (Map.Entry<LLVMBasicBlockRef, List<LLVMBasicBlockRef>> entry : conditionalBranches.entrySet())
         {
-            for (LLVMBasicBlockRef pred : entry.getValue())
+            for (LLVMBasicBlockRef branchBlock : entry.getValue())
             {
-                // 如果一个基本块可以到达自己或其前驱，则它是循环头
-                if (canReach(pred, entry.getKey(), successors))
+                // 收集这个分支块中所有store指令赋值的变量
+                for (LLVMValueRef inst = LLVMGetFirstInstruction(branchBlock); inst != null; inst = LLVMGetNextInstruction(inst))
                 {
-                    loopHeaders.add(entry.getKey());
-                    break;
+                    int opcode = LLVMGetInstructionOpcode(inst);
+                    if (opcode == LLVMStore)
+                    {
+                        LLVMValueRef ptr = LLVMGetOperand(inst, 1); // 存储目标
+                        String ptrName = LLVMGetValueName(ptr).getString();
+                        variablesAssignedInBranches.add(ptrName);
+                        System.out.println("在条件分支中发现变量赋值: " + ptrName);
+                    }
                 }
             }
         }
 
-        // 收集每个基本块中被修改的变量
+        // 第二阶段及后续逻辑与原来相似，但需修改load指令处理部分
+
+        // 收集每个基本块中被修改的变量 - 与之前代码保持一致
         for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb))
         {
             Set<String> modified = modifiedVars.computeIfAbsent(bb, k -> new HashSet<>());
@@ -440,61 +474,67 @@ public class LLVMOptimizer {
             }
         }
 
-        // 第三阶段：基于循环信息进行常量传播
+        // 标识循环和被修改的变量 - 与之前代码保持一致
+        Set<LLVMBasicBlockRef> loopHeaders = new HashSet<>();
+        for (Map.Entry<LLVMBasicBlockRef, Set<LLVMBasicBlockRef>> entry : predecessors.entrySet())
+        {
+            for (LLVMBasicBlockRef pred : entry.getValue())
+            {
+                if (canReach(pred, entry.getKey(), successors))
+                {
+                    loopHeaders.add(entry.getKey());
+                    break;
+                }
+            }
+        }
+
+        // 执行常量传播 - 与之前代码类似，但在处理load指令时添加额外检查
         boolean changed;
         int totalReplacements = 0;
 
-        // 多次迭代直到没有新的常量被发现
         do
         {
             changed = false;
             constantValues.clear();
             replacements.clear();
 
-            // 处理每个基本块
             for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb))
             {
                 boolean isLoopHeader = loopHeaders.contains(bb);
 
-                // 如果是循环头，重置常量映射中可能被循环修改的变量
                 if (isLoopHeader)
                 {
-                    // 收集可能在循环中被修改的所有变量
                     Set<String> loopModifiedVars = new HashSet<>();
                     collectLoopModifiedVars(bb, loopModifiedVars, modifiedVars, successors, new HashSet<>());
 
-                    // 从常量映射中移除这些变量
                     for (String var : loopModifiedVars)
                     {
                         constantValues.remove(var);
                     }
                 }
 
-                // 处理基本块中的每条指令
                 for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst))
                 {
                     if (foldedInstructions.contains(inst))
                     {
-                        continue; // 跳过已处理的指令
+                        continue;
                     }
 
                     int opcode = LLVMGetInstructionOpcode(inst);
 
                     if (opcode == LLVMStore)
                     {
-                        // store指令：如果存储的是常量，记录目标地址的常量值
+                        // store指令处理 - 与之前相同
                         LLVMValueRef value = LLVMGetOperand(inst, 0);
                         LLVMValueRef ptr = LLVMGetOperand(inst, 1);
                         String ptrName = LLVMGetValueName(ptr).getString();
 
-                        // 检查是否存储常量
                         if (LLVMIsAConstant(value) != null)
                         {
                             constantValues.put(ptrName, value);
                         }
                         else
                         {
-                            // 非常量赋值，检查是否是常量表达式的结果
                             if (constantValues.containsKey(LLVMGetValueName(value).getString()))
                             {
                                 constantValues.put(ptrName, constantValues.get(LLVMGetValueName(value).getString()));
@@ -507,35 +547,34 @@ public class LLVMOptimizer {
                     }
                     else if (opcode == LLVMLoad)
                     {
-                        // load指令：检查是否从已知常量位置加载
+                        // load指令处理 - 修改这部分以检查变量是否在条件分支中被赋值
                         LLVMValueRef ptr = LLVMGetOperand(inst, 0);
                         String ptrName = LLVMGetValueName(ptr).getString();
 
-                        // 处理循环中变量修改的情况
                         boolean inLoop = isInLoop(bb, loopHeaders, predecessors);
                         boolean varModifiedInLoop = false;
 
                         if (isGlobalVariable(ptrName))
                         {
-                            // 对全局变量进行特殊处理
-                            // 如果在循环中，保守地假设全局变量可能被修改
                             if (inLoop)
                             {
                                 varModifiedInLoop = true;
                             }
                             else
                             {
-                                // 循环外，仍然检查是否有修改
                                 varModifiedInLoop = isVarModifiedInLoop(ptrName, bb, modifiedVars, successors);
                             }
                         }
                         else
                         {
-                            // 局部变量，使用原有的检查方法
                             varModifiedInLoop = isVarModifiedInLoop(ptrName, bb, modifiedVars, successors);
                         }
 
-                        if (!inLoop || !varModifiedInLoop)
+                        // 新增检查：变量是否在条件分支中被赋值
+                        boolean assignedInBranch = variablesAssignedInBranches.contains(ptrName);
+
+                        // 只有在变量不在循环中被修改，且不在条件分支中被赋值时，才进行常量传播
+                        if ((!inLoop || !varModifiedInLoop) && !assignedInBranch)
                         {
                             if (constantValues.containsKey(ptrName))
                             {
@@ -545,6 +584,8 @@ public class LLVMOptimizer {
                             }
                         }
                     }
+
+                    // 其他指令处理与之前相同
                     else if (isArithmeticOp(opcode))
                     {
                         // 算术指令：尝试常量折叠
@@ -584,20 +625,17 @@ public class LLVMOptimizer {
                             }
                         }
                     }
-                    // 其他指令类型...
                 }
             }
 
-            // 应用本轮识别的常量替换
+            // 应用替换与之前相同
             for (Map.Entry<LLVMValueRef, LLVMValueRef> entry : replacements.entrySet())
             {
                 LLVMValueRef inst = entry.getKey();
                 LLVMValueRef constant = entry.getValue();
 
-                // 替换所有使用
                 LLVMReplaceAllUsesWith(inst, constant);
 
-                // 如果指令不再被使用，可以删除它
                 if (!foldedInstructions.contains(inst) && LLVMGetFirstUse(inst) == null)
                 {
                     LLVMInstructionEraseFromParent(inst);
@@ -735,7 +773,8 @@ public class LLVMOptimizer {
      *
      * @param func 待优化的函数
      */
-    private void fixGlobalVariableUpdates(LLVMValueRef func) {
+    private void fixGlobalVariableUpdates(LLVMValueRef func)
+    {
         // 不仅存储加载指令，还需存储加载指令的结果值
         Map<String, LLVMValueRef> globalLoads = new HashMap<>(); // 全局变量名 -> load指令（即结果值）
 
@@ -748,7 +787,8 @@ public class LLVMOptimizer {
         System.out.println("开始检查函数 " + LLVMGetValueName(func).getString() + " 的全局变量更新");
 
         // 遍历所有基本块和指令
-        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
+        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb))
+        {
             // 每个基本块开始时清空状态
             globalLoads.clear();
             globalModified.clear();
@@ -756,35 +796,42 @@ public class LLVMOptimizer {
             LLVMValueRef lastInst = null;
             LLVMValueRef prevInst = null;
 
-            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst)) {
+            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst))
+            {
 
                 prevInst = lastInst;
                 lastInst = inst;
                 int opcode = LLVMGetInstructionOpcode(inst);
 
-                if (opcode == LLVMLoad) {
+                if (opcode == LLVMLoad)
+                {
                     // 检查是否从全局变量加载
                     LLVMValueRef ptr = LLVMGetOperand(inst, 0);
                     String ptrName = LLVMGetValueName(ptr).getString();
 
-                    if (isGlobalVariable(ptrName)) {
+                    if (isGlobalVariable(ptrName))
+                    {
                         // 记录加载指令作为该全局变量的值
                         globalLoads.put(normalizeGlobalName(ptrName), inst);
                         System.out.println("  检测到全局变量加载: " + ptrName);
                     }
                 }
                 // 对加载后的值进行算术操作
-                else if (isArithmeticOp(opcode)) {
+                else if (isArithmeticOp(opcode))
+                {
                     boolean usesGlobalVar = false;
                     String globalVarUsed = null;
 
                     // 检查操作数是否包含全局变量的加载结果
-                    for (int i = 0; i < LLVMGetNumOperands(inst); i++) {
+                    for (int i = 0; i < LLVMGetNumOperands(inst); i++)
+                    {
                         LLVMValueRef operand = LLVMGetOperand(inst, i);
 
                         // 检查所有已加载的全局变量
-                        for (Map.Entry<String, LLVMValueRef> entry : globalLoads.entrySet()) {
-                            if (operand == entry.getValue()) {
+                        for (Map.Entry<String, LLVMValueRef> entry : globalLoads.entrySet())
+                        {
+                            if (operand == entry.getValue())
+                            {
                                 usesGlobalVar = true;
                                 globalVarUsed = entry.getKey();
                                 break;
@@ -795,7 +842,8 @@ public class LLVMOptimizer {
                             break;
                     }
 
-                    if (usesGlobalVar) {
+                    if (usesGlobalVar)
+                    {
                         // 标记此全局变量被修改，并记录修改它的指令
                         globalModified.put(globalVarUsed, inst);
                         System.out.println("  检测到全局变量修改: " + globalVarUsed);
@@ -805,14 +853,17 @@ public class LLVMOptimizer {
                 // 处理函数调用、分支或基本块结束前的情况
                 boolean isCallOrTerminator = opcode == LLVMCall || LLVMIsATerminatorInst(inst) != null;
 
-                if (isCallOrTerminator && prevInst != null) {
+                if (isCallOrTerminator && prevInst != null)
+                {
                     // 在函数调用或终结指令前，插入全局变量更新
-                    for (Map.Entry<String, LLVMValueRef> entry : globalModified.entrySet()) {
+                    for (Map.Entry<String, LLVMValueRef> entry : globalModified.entrySet())
+                    {
                         String globalName = entry.getKey();
                         LLVMValueRef valueInst = entry.getValue();
                         LLVMValueRef globalPtr = findGlobalVariable(globalName);
 
-                        if (globalPtr != null) {
+                        if (globalPtr != null)
+                        {
                             // 创建存储插入点
                             storeInsertions.add(new StoreInsertionPoint(bb, inst, globalPtr, valueInst));
                             System.out.println("  计划在指令前插入全局变量 " + globalName + " 的存储");
@@ -820,7 +871,8 @@ public class LLVMOptimizer {
                     }
 
                     // 如果是函数调用，清除全局变量状态
-                    if (opcode == LLVMCall) {
+                    if (opcode == LLVMCall)
+                    {
                         globalLoads.clear();
                         globalModified.clear();
                     }
@@ -828,13 +880,16 @@ public class LLVMOptimizer {
             }
 
             // 在基本块结束时，为所有修改过但未存储的全局变量添加store指令
-            if (lastInst != null && !globalModified.isEmpty()) {
-                for (Map.Entry<String, LLVMValueRef> entry : globalModified.entrySet()) {
+            if (lastInst != null && !globalModified.isEmpty())
+            {
+                for (Map.Entry<String, LLVMValueRef> entry : globalModified.entrySet())
+                {
                     String globalName = entry.getKey();
                     LLVMValueRef valueInst = entry.getValue();
                     LLVMValueRef globalPtr = findGlobalVariable(globalName);
 
-                    if (globalPtr != null) {
+                    if (globalPtr != null)
+                    {
                         storeInsertions.add(new StoreInsertionPoint(bb, lastInst, globalPtr, valueInst));
                         System.out.println("  计划在基本块结束前插入全局变量 " + globalName + " 的存储");
                     }
@@ -844,7 +899,8 @@ public class LLVMOptimizer {
 
         // 执行所有store指令插入
         int insertedStores = 0;
-        for (StoreInsertionPoint point : storeInsertions) {
+        for (StoreInsertionPoint point : storeInsertions)
+        {
             LLVMBuilderRef builder = LLVMCreateBuilder();
             LLVMPositionBuilderBefore(builder, point.insertBefore); // 在指令之前插入
             LLVMBuildStore(builder, point.value, point.globalPtr);
@@ -853,13 +909,14 @@ public class LLVMOptimizer {
         }
 
         System.out.println("优化函数 " + LLVMGetValueName(func).getString() +
-                "，修复全局变量更新，插入了 " + insertedStores + " 个store指令");
+            "，修复全局变量更新，插入了 " + insertedStores + " 个store指令");
     }
 
     /**
      * 标准化全局变量名（去除@前缀）
      */
-    private String normalizeGlobalName(String name) {
+    private String normalizeGlobalName(String name)
+    {
         return name.startsWith("@") ? name.substring(1) : name;
     }
 
@@ -867,14 +924,17 @@ public class LLVMOptimizer {
      * 在指定位置前插入store指令，用于更新全局变量
      */
     private void insertStoreInstructions(LLVMBasicBlockRef bb, LLVMValueRef insertBefore,
-            Map<String, LLVMValueRef> globalModified,
-            List<StoreInsertionPoint> storeInsertions) {
-        for (Map.Entry<String, LLVMValueRef> entry : globalModified.entrySet()) {
+                                         Map<String, LLVMValueRef> globalModified,
+                                         List<StoreInsertionPoint> storeInsertions)
+    {
+        for (Map.Entry<String, LLVMValueRef> entry : globalModified.entrySet())
+        {
             String globalName = entry.getKey();
             LLVMValueRef value = entry.getValue();
 
             LLVMValueRef globalPtr = findGlobalVariable(globalName);
-            if (globalPtr != null) {
+            if (globalPtr != null)
+            {
                 storeInsertions.add(new StoreInsertionPoint(bb, insertBefore, globalPtr, value));
             }
         }
@@ -883,7 +943,8 @@ public class LLVMOptimizer {
     /**
      * 判断是否是全局变量
      */
-    private boolean isGlobalVariable(String name) {
+    private boolean isGlobalVariable(String name)
+    {
         String normalizedName = normalizeGlobalName(name);
         return globalVariables.contains(normalizedName);
     }
@@ -891,12 +952,15 @@ public class LLVMOptimizer {
     /**
      * 查找全局变量
      */
-    private LLVMValueRef findGlobalVariable(String name) {
+    private LLVMValueRef findGlobalVariable(String name)
+    {
         String normalizedName = normalizeGlobalName(name);
 
-        for (LLVMValueRef global = LLVMGetFirstGlobal(module); global != null; global = LLVMGetNextGlobal(global)) {
+        for (LLVMValueRef global = LLVMGetFirstGlobal(module); global != null; global = LLVMGetNextGlobal(global))
+        {
             String globalName = LLVMGetValueName(global).getString();
-            if (globalName.equals(normalizedName)) {
+            if (globalName.equals(normalizedName))
+            {
                 return global;
             }
         }
@@ -909,12 +973,13 @@ public class LLVMOptimizer {
      * @param opcode 操作码
      * @return 是否是算术操作
      */
-    private boolean isArithmeticOp(int opcode) {
+    private boolean isArithmeticOp(int opcode)
+    {
         return opcode == LLVMAdd || opcode == LLVMFAdd ||
-                opcode == LLVMSub || opcode == LLVMFSub ||
-                opcode == LLVMMul || opcode == LLVMFMul ||
-                opcode == LLVMUDiv || opcode == LLVMSDiv || opcode == LLVMFDiv ||
-                opcode == LLVMURem || opcode == LLVMSRem || opcode == LLVMFRem;
+            opcode == LLVMSub || opcode == LLVMFSub ||
+            opcode == LLVMMul || opcode == LLVMFMul ||
+            opcode == LLVMUDiv || opcode == LLVMSDiv || opcode == LLVMFDiv ||
+            opcode == LLVMURem || opcode == LLVMSRem || opcode == LLVMFRem;
     }
 
     /**
@@ -926,10 +991,12 @@ public class LLVMOptimizer {
      * @param opcode   操作码
      * @return 折叠结果，如果无法折叠则返回null
      */
-    private LLVMValueRef foldConstantExpression(LLVMValueRef inst, LLVMValueRef[] operands, int opcode) {
+    private LLVMValueRef foldConstantExpression(LLVMValueRef inst, LLVMValueRef[] operands, int opcode)
+    {
         // 简化实现，只处理整数常量
         // 实际上需要更复杂的实现来处理各种类型和操作
-        try {
+        try
+        {
             if (operands.length < 2)
                 return null;
 
@@ -940,7 +1007,8 @@ public class LLVMOptimizer {
             long result = 0;
             boolean valid = true;
 
-            switch (opcode) {
+            switch (opcode)
+            {
                 case LLVMAdd:
                     result = value1 + value2;
                     break;
@@ -951,16 +1019,22 @@ public class LLVMOptimizer {
                     result = value1 * value2;
                     break;
                 case LLVMSDiv:
-                    if (value2 == 0) {
+                    if (value2 == 0)
+                    {
                         valid = false;
-                    } else {
+                    }
+                    else
+                    {
                         result = value1 / value2;
                     }
                     break;
                 case LLVMSRem:
-                    if (value2 == 0) {
+                    if (value2 == 0)
+                    {
                         valid = false;
-                    } else {
+                    }
+                    else
+                    {
                         result = value1 % value2;
                     }
                     break;
@@ -968,12 +1042,15 @@ public class LLVMOptimizer {
                     valid = false;
             }
 
-            if (valid) {
+            if (valid)
+            {
                 // 创建新的常量值
                 LLVMTypeRef type = LLVMTypeOf(inst);
                 return LLVMConstInt(type, result, 1); // 带符号整数
             }
-        } catch (Exception e) {
+        }
+        catch (Exception e)
+        {
             // 处理可能的异常，如不支持的操作数类型
         }
 
@@ -988,7 +1065,8 @@ public class LLVMOptimizer {
      * @param loadInst  load指令
      * @return 如果没有冲突写入返回true
      */
-    private boolean isSafeToReplace(LLVMValueRef storeInst, LLVMValueRef loadInst) {
+    private boolean isSafeToReplace(LLVMValueRef storeInst, LLVMValueRef loadInst)
+    {
         // 在完整版本中，我们需要检查storeInst和loadInst之间的所有指令
         // 查看是否有其他写入相同内存位置的操作
 
@@ -1002,7 +1080,8 @@ public class LLVMOptimizer {
      *
      * @param func 待优化的函数
      */
-    private void simplifyBranchConditions(LLVMValueRef func) {
+    private void simplifyBranchConditions(LLVMValueRef func)
+    {
         // 追踪所有的icmp指令和它们的结果
         Map<String, LLVMValueRef> icmpResults = new HashMap<>();
 
@@ -1013,18 +1092,23 @@ public class LLVMOptimizer {
         Map<String, String> zextSources = new HashMap<>();
 
         // 第一次遍历：识别所有的icmp和zext指令
-        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
-            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst)) {
+        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb))
+        {
+            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst))
+            {
                 int opcode = LLVMGetInstructionOpcode(inst);
 
                 // 处理icmp指令
-                if (opcode == LLVMICmp) {
+                if (opcode == LLVMICmp)
+                {
                     String resultName = LLVMGetValueName(inst).getString();
                     icmpResults.put(resultName, inst);
                 }
                 // 处理zext指令
-                else if (opcode == LLVMZExt) {
-                    if (LLVMGetNumOperands(inst) > 0) {
+                else if (opcode == LLVMZExt)
+                {
+                    if (LLVMGetNumOperands(inst) > 0)
+                    {
                         LLVMValueRef source = LLVMGetOperand(inst, 0);
                         String sourceName = LLVMGetValueName(source).getString();
                         String resultName = LLVMGetValueName(inst).getString();
@@ -1037,26 +1121,33 @@ public class LLVMOptimizer {
         }
 
         // 第二次遍历：寻找 "zext -> icmp ne 0" 模式
-        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
-            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst)) {
+        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb))
+        {
+            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst))
+            {
                 int opcode = LLVMGetInstructionOpcode(inst);
 
                 // 检查是否是icmp ne指令
-                if (opcode == LLVMICmp && LLVMGetICmpPredicate(inst) == LLVMIntNE) {
-                    if (LLVMGetNumOperands(inst) >= 2) {
+                if (opcode == LLVMICmp && LLVMGetICmpPredicate(inst) == LLVMIntNE)
+                {
+                    if (LLVMGetNumOperands(inst) >= 2)
+                    {
                         LLVMValueRef op1 = LLVMGetOperand(inst, 0);
                         LLVMValueRef op2 = LLVMGetOperand(inst, 1);
 
                         // 检查第二个操作数是否为常量0，第一个操作数是否来自zext
-                        if (LLVMIsAConstantInt(op2) != null && LLVMConstIntGetSExtValue(op2) == 0) {
+                        if (LLVMIsAConstantInt(op2) != null && LLVMConstIntGetSExtValue(op2) == 0)
+                        {
                             String op1Name = LLVMGetValueName(op1).getString();
 
                             // 如果op1是zext的结果
-                            if (zextSources.containsKey(op1Name)) {
+                            if (zextSources.containsKey(op1Name))
+                            {
                                 String originalIcmpName = zextSources.get(op1Name);
 
                                 // 检查zext的源是否是icmp结果
-                                if (icmpResults.containsKey(originalIcmpName)) {
+                                if (icmpResults.containsKey(originalIcmpName))
+                                {
                                     // 找到冗余模式，标记为可替换
                                     replacements.put(inst, icmpResults.get(originalIcmpName));
                                 }
@@ -1068,7 +1159,8 @@ public class LLVMOptimizer {
         }
 
         // 执行替换
-        for (Map.Entry<LLVMValueRef, LLVMValueRef> entry : replacements.entrySet()) {
+        for (Map.Entry<LLVMValueRef, LLVMValueRef> entry : replacements.entrySet())
+        {
             LLVMValueRef redundantInst = entry.getKey();
             LLVMValueRef originalIcmp = entry.getValue();
 
@@ -1080,20 +1172,22 @@ public class LLVMOptimizer {
         }
 
         System.out.println("优化函数 " + LLVMGetValueName(func).getString() +
-                "，简化了 " + replacements.size() + " 个冗余分支条件");
+            "，简化了 " + replacements.size() + " 个冗余分支条件");
     }
 
     /**
      * 用于存储需要插入的store指令信息
      */
-    private static class StoreInsertionPoint {
+    private static class StoreInsertionPoint
+    {
         LLVMBasicBlockRef block;
         LLVMValueRef insertBefore;
         LLVMValueRef globalPtr;
         LLVMValueRef value;
 
         public StoreInsertionPoint(LLVMBasicBlockRef block, LLVMValueRef insertBefore,
-                LLVMValueRef globalPtr, LLVMValueRef value) {
+                                   LLVMValueRef globalPtr, LLVMValueRef value)
+        {
             this.block = block;
             this.insertBefore = insertBefore;
             this.globalPtr = globalPtr;

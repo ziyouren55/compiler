@@ -41,7 +41,7 @@ public class LLVMOptimizer
         {
             String name = LLVMGetValueName(global).getString();
             globalVariables.add(name);
-            System.out.println("收集到全局变量: " + name);
+//            System.out.println("收集到全局变量: " + name);
         }
     }
 
@@ -150,8 +150,8 @@ public class LLVMOptimizer
             LLVMInstructionEraseFromParent(loadInst);
         }
 
-        System.out.println("优化函数 " + LLVMGetValueName(func).getString() +
-            "，消除了 " + replacements.size() + " 个冗余load操作");
+//        System.out.println("优化函数 " + LLVMGetValueName(func).getString() +
+//            "，消除了 " + replacements.size() + " 个冗余load操作");
     }
 
     /**
@@ -354,8 +354,8 @@ public class LLVMOptimizer
             LLVMInstructionEraseFromParent(deadStore);
         }
 
-        System.out.println("优化函数 " + LLVMGetValueName(func).getString() +
-            "，消除了 " + deadStores.size() + " 个死存储操作");
+//        System.out.println("优化函数 " + LLVMGetValueName(func).getString() +
+//            "，消除了 " + deadStores.size() + " 个死存储操作");
     }
 
 
@@ -446,7 +446,7 @@ public class LLVMOptimizer
                         LLVMValueRef ptr = LLVMGetOperand(inst, 1); // 存储目标
                         String ptrName = LLVMGetValueName(ptr).getString();
                         variablesAssignedInBranches.add(ptrName);
-                        System.out.println("在条件分支中发现变量赋值: " + ptrName);
+//                        System.out.println("在条件分支中发现变量赋值: " + ptrName);
                     }
                 }
             }
@@ -646,8 +646,8 @@ public class LLVMOptimizer
 
         } while (changed);
 
-        System.out.println("优化函数 " + LLVMGetValueName(func).getString() +
-            "，常量传播执行了 " + totalReplacements + " 次替换");
+//        System.out.println("优化函数 " + LLVMGetValueName(func).getString() +
+//            "，常量传播执行了 " + totalReplacements + " 次替换");
     }
 
     /**
@@ -784,7 +784,7 @@ public class LLVMOptimizer
         // 需要插入store指令的信息
         List<StoreInsertionPoint> storeInsertions = new ArrayList<>();
 
-        System.out.println("开始检查函数 " + LLVMGetValueName(func).getString() + " 的全局变量更新");
+//        System.out.println("开始检查函数 " + LLVMGetValueName(func).getString() + " 的全局变量更新");
 
         // 遍历所有基本块和指令
         for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb))
@@ -813,7 +813,7 @@ public class LLVMOptimizer
                     {
                         // 记录加载指令作为该全局变量的值
                         globalLoads.put(normalizeGlobalName(ptrName), inst);
-                        System.out.println("  检测到全局变量加载: " + ptrName);
+//                        System.out.println("  检测到全局变量加载: " + ptrName);
                     }
                 }
                 // 对加载后的值进行算术操作
@@ -846,7 +846,7 @@ public class LLVMOptimizer
                     {
                         // 标记此全局变量被修改，并记录修改它的指令
                         globalModified.put(globalVarUsed, inst);
-                        System.out.println("  检测到全局变量修改: " + globalVarUsed);
+//                        System.out.println("  检测到全局变量修改: " + globalVarUsed);
                     }
                 }
 
@@ -866,7 +866,7 @@ public class LLVMOptimizer
                         {
                             // 创建存储插入点
                             storeInsertions.add(new StoreInsertionPoint(bb, inst, globalPtr, valueInst));
-                            System.out.println("  计划在指令前插入全局变量 " + globalName + " 的存储");
+//                            System.out.println("  计划在指令前插入全局变量 " + globalName + " 的存储");
                         }
                     }
 
@@ -891,7 +891,7 @@ public class LLVMOptimizer
                     if (globalPtr != null)
                     {
                         storeInsertions.add(new StoreInsertionPoint(bb, lastInst, globalPtr, valueInst));
-                        System.out.println("  计划在基本块结束前插入全局变量 " + globalName + " 的存储");
+//                        System.out.println("  计划在基本块结束前插入全局变量 " + globalName + " 的存储");
                     }
                 }
             }
@@ -908,8 +908,8 @@ public class LLVMOptimizer
             insertedStores++;
         }
 
-        System.out.println("优化函数 " + LLVMGetValueName(func).getString() +
-            "，修复全局变量更新，插入了 " + insertedStores + " 个store指令");
+//        System.out.println("优化函数 " + LLVMGetValueName(func).getString() +
+//            "，修复全局变量更新，插入了 " + insertedStores + " 个store指令");
     }
 
     /**
@@ -1171,8 +1171,8 @@ public class LLVMOptimizer
             LLVMInstructionEraseFromParent(redundantInst);
         }
 
-        System.out.println("优化函数 " + LLVMGetValueName(func).getString() +
-            "，简化了 " + replacements.size() + " 个冗余分支条件");
+//        System.out.println("优化函数 " + LLVMGetValueName(func).getString() +
+//            "，简化了 " + replacements.size() + " 个冗余分支条件");
     }
 
     /**

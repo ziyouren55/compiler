@@ -217,7 +217,7 @@ public class AsmBuilder {
     }
 
     public String emitStoreGlobal(String reg, String varName) {
-        return String.format("    la t6, %s\n    sw %s, 0(t6)\n", varName, reg);
+        return String.format("    la t4, %s\n    sw %s, 0(t4)\n", varName, reg);
     }
 
     private String genLabel(String prefix) {

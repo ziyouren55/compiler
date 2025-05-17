@@ -339,12 +339,13 @@ public class LLVMOptimizer {
     }
 
     /**
-     * 常量传播优化
-     * 识别常量操作数并直接替换为常量结果
+     * 改进的常量传播优化
+     * 处理循环和跨基本块的变量更新
      *
      * @param func 待优化的函数
      */
-    private void propagateConstants(LLVMValueRef func) {
+    private void propagateConstants(LLVMValueRef func)
+    {
         // 跟踪变量到常量值的映射
         Map<String, LLVMValueRef> constantValues = new HashMap<>();
 
@@ -354,78 +355,242 @@ public class LLVMOptimizer {
         // 已处理的常量折叠指令
         Set<LLVMValueRef> foldedInstructions = new HashSet<>();
 
+        // 跟踪在基本块中被修改的变量
+        Map<LLVMBasicBlockRef, Set<String>> modifiedVars = new HashMap<>();
+
+        // 跟踪基本块之间的跳转关系
+        Map<LLVMBasicBlockRef, Set<LLVMBasicBlockRef>> successors = new HashMap<>();
+        Map<LLVMBasicBlockRef, Set<LLVMBasicBlockRef>> predecessors = new HashMap<>();
+
+        // 第一阶段：建立基本块的控制流图
+        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb))
+        {
+            // 获取基本块的终结指令
+            LLVMValueRef termInst = LLVMGetLastInstruction(bb);
+            if (termInst != null && LLVMIsATerminatorInst(termInst) != null)
+            {
+                int opcode = LLVMGetInstructionOpcode(termInst);
+
+                // 处理br指令
+                if (opcode == LLVMBr)
+                {
+                    int numOperands = LLVMGetNumOperands(termInst);
+
+                    // 条件分支
+                    if (numOperands == 3)
+                    {
+                        LLVMBasicBlockRef trueBlock = LLVMValueAsBasicBlock(LLVMGetOperand(termInst, 1));
+                        LLVMBasicBlockRef falseBlock = LLVMValueAsBasicBlock(LLVMGetOperand(termInst, 2));
+
+                        // 添加后继基本块
+                        successors.computeIfAbsent(bb, k -> new HashSet<>()).add(trueBlock);
+                        successors.computeIfAbsent(bb, k -> new HashSet<>()).add(falseBlock);
+
+                        // 添加前驱基本块
+                        predecessors.computeIfAbsent(trueBlock, k -> new HashSet<>()).add(bb);
+                        predecessors.computeIfAbsent(falseBlock, k -> new HashSet<>()).add(bb);
+                    }
+                    // 无条件分支
+                    else if (numOperands == 1)
+                    {
+                        LLVMBasicBlockRef destBlock = LLVMValueAsBasicBlock(LLVMGetOperand(termInst, 0));
+
+                        // 添加后继基本块
+                        successors.computeIfAbsent(bb, k -> new HashSet<>()).add(destBlock);
+
+                        // 添加前驱基本块
+                        predecessors.computeIfAbsent(destBlock, k -> new HashSet<>()).add(bb);
+                    }
+                }
+            }
+        }
+
+        // 第二阶段：标识循环和被修改的变量
+        Set<LLVMBasicBlockRef> loopHeaders = new HashSet<>();
+        for (Map.Entry<LLVMBasicBlockRef, Set<LLVMBasicBlockRef>> entry : predecessors.entrySet())
+        {
+            for (LLVMBasicBlockRef pred : entry.getValue())
+            {
+                // 如果一个基本块可以到达自己或其前驱，则它是循环头
+                if (canReach(pred, entry.getKey(), successors))
+                {
+                    loopHeaders.add(entry.getKey());
+                    break;
+                }
+            }
+        }
+
+        // 收集每个基本块中被修改的变量
+        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb))
+        {
+            Set<String> modified = modifiedVars.computeIfAbsent(bb, k -> new HashSet<>());
+
+            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst))
+            {
+                int opcode = LLVMGetInstructionOpcode(inst);
+
+                if (opcode == LLVMStore)
+                {
+                    LLVMValueRef ptr = LLVMGetOperand(inst, 1); // 目标地址
+                    String ptrName = LLVMGetValueName(ptr).getString();
+
+                    // 记录所有被修改的变量，包括全局变量
+                    modified.add(ptrName);
+                }
+            }
+        }
+
+        // 第三阶段：基于循环信息进行常量传播
         boolean changed;
         int totalReplacements = 0;
 
         // 多次迭代直到没有新的常量被发现
-        do {
+        do
+        {
             changed = false;
+            constantValues.clear();
+            replacements.clear();
 
-            for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
+            // 处理每个基本块
+            for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb))
+            {
+                boolean isLoopHeader = loopHeaders.contains(bb);
 
-                for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(
-                        inst)) {
+                // 如果是循环头，重置常量映射中可能被循环修改的变量
+                if (isLoopHeader)
+                {
+                    // 收集可能在循环中被修改的所有变量
+                    Set<String> loopModifiedVars = new HashSet<>();
+                    collectLoopModifiedVars(bb, loopModifiedVars, modifiedVars, successors, new HashSet<>());
 
-                    if (foldedInstructions.contains(inst)) {
+                    // 从常量映射中移除这些变量
+                    for (String var : loopModifiedVars)
+                    {
+                        constantValues.remove(var);
+                    }
+                }
+
+                // 处理基本块中的每条指令
+                for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst))
+                {
+                    if (foldedInstructions.contains(inst))
+                    {
                         continue; // 跳过已处理的指令
                     }
 
                     int opcode = LLVMGetInstructionOpcode(inst);
 
-                    if (opcode == LLVMStore) {
+                    if (opcode == LLVMStore)
+                    {
                         // store指令：如果存储的是常量，记录目标地址的常量值
                         LLVMValueRef value = LLVMGetOperand(inst, 0);
                         LLVMValueRef ptr = LLVMGetOperand(inst, 1);
                         String ptrName = LLVMGetValueName(ptr).getString();
 
-                        // 检查存储的是否是常量
-                        if (LLVMIsAConstant(value) != null) {
+                        // 检查是否存储常量
+                        if (LLVMIsAConstant(value) != null)
+                        {
                             constantValues.put(ptrName, value);
-                        } else {
-                            // 如果不是常量，清除该内存位置的常量记录
-                            constantValues.remove(ptrName);
                         }
-                    } else if (opcode == LLVMLoad) {
+                        else
+                        {
+                            // 非常量赋值，检查是否是常量表达式的结果
+                            if (constantValues.containsKey(LLVMGetValueName(value).getString()))
+                            {
+                                constantValues.put(ptrName, constantValues.get(LLVMGetValueName(value).getString()));
+                            }
+                            else
+                            {
+                                constantValues.remove(ptrName);
+                            }
+                        }
+                    }
+                    else if (opcode == LLVMLoad)
+                    {
                         // load指令：检查是否从已知常量位置加载
                         LLVMValueRef ptr = LLVMGetOperand(inst, 0);
                         String ptrName = LLVMGetValueName(ptr).getString();
 
-                        if (constantValues.containsKey(ptrName)) {
-                            LLVMValueRef constantValue = constantValues.get(ptrName);
-                            replacements.put(inst, constantValue);
-                            changed = true;
+                        // 处理循环中变量修改的情况
+                        boolean inLoop = isInLoop(bb, loopHeaders, predecessors);
+                        boolean varModifiedInLoop = false;
+
+                        if (isGlobalVariable(ptrName))
+                        {
+                            // 对全局变量进行特殊处理
+                            // 如果在循环中，保守地假设全局变量可能被修改
+                            if (inLoop)
+                            {
+                                varModifiedInLoop = true;
+                            }
+                            else
+                            {
+                                // 循环外，仍然检查是否有修改
+                                varModifiedInLoop = isVarModifiedInLoop(ptrName, bb, modifiedVars, successors);
+                            }
                         }
-                    } else if (isArithmeticOp(opcode)) {
+                        else
+                        {
+                            // 局部变量，使用原有的检查方法
+                            varModifiedInLoop = isVarModifiedInLoop(ptrName, bb, modifiedVars, successors);
+                        }
+
+                        if (!inLoop || !varModifiedInLoop)
+                        {
+                            if (constantValues.containsKey(ptrName))
+                            {
+                                LLVMValueRef constantValue = constantValues.get(ptrName);
+                                replacements.put(inst, constantValue);
+                                changed = true;
+                            }
+                        }
+                    }
+                    else if (isArithmeticOp(opcode))
+                    {
                         // 算术指令：尝试常量折叠
                         boolean allOperandsConstant = true;
                         LLVMValueRef[] operands = new LLVMValueRef[LLVMGetNumOperands(inst)];
 
                         // 收集所有操作数
-                        for (int i = 0; i < operands.length; i++) {
+                        for (int i = 0; i < operands.length; i++)
+                        {
                             operands[i] = LLVMGetOperand(inst, i);
-                            if (LLVMIsAConstant(operands[i]) == null) {
-                                allOperandsConstant = false;
-                                break;
+                            // 检查操作数是否是常量或常量表达式结果
+                            if (LLVMIsAConstant(operands[i]) == null)
+                            {
+                                String opName = LLVMGetValueName(operands[i]).getString();
+                                if (!constantValues.containsKey(opName))
+                                {
+                                    allOperandsConstant = false;
+                                    break;
+                                }
+                                else
+                                {
+                                    operands[i] = constantValues.get(opName);
+                                }
                             }
                         }
 
-                        // 如果所有操作数都是常量，尝试进行常量折叠
-                        if (allOperandsConstant && operands.length > 0) {
-                            // 这里我们需要一个更复杂的常量折叠实现
-                            // 为简化起见，我们只处理简单情况
+                        // 尝试进行常量折叠
+                        if (allOperandsConstant && operands.length > 0)
+                        {
                             LLVMValueRef constResult = foldConstantExpression(inst, operands, opcode);
-                            if (constResult != null) {
+                            if (constResult != null)
+                            {
                                 replacements.put(inst, constResult);
+                                constantValues.put(LLVMGetValueName(inst).getString(), constResult);
                                 changed = true;
                                 foldedInstructions.add(inst);
                             }
                         }
                     }
+                    // 其他指令类型...
                 }
             }
 
-            // 应用本轮发现的常量替换
-            for (Map.Entry<LLVMValueRef, LLVMValueRef> entry : replacements.entrySet()) {
+            // 应用本轮识别的常量替换
+            for (Map.Entry<LLVMValueRef, LLVMValueRef> entry : replacements.entrySet())
+            {
                 LLVMValueRef inst = entry.getKey();
                 LLVMValueRef constant = entry.getValue();
 
@@ -433,18 +598,135 @@ public class LLVMOptimizer {
                 LLVMReplaceAllUsesWith(inst, constant);
 
                 // 如果指令不再被使用，可以删除它
-                if (!foldedInstructions.contains(inst) && LLVMGetFirstUse(inst) == null) {
+                if (!foldedInstructions.contains(inst) && LLVMGetFirstUse(inst) == null)
+                {
                     LLVMInstructionEraseFromParent(inst);
                 }
             }
 
             totalReplacements += replacements.size();
-            replacements.clear();
 
         } while (changed);
 
         System.out.println("优化函数 " + LLVMGetValueName(func).getString() +
-                "，常量传播执行了 " + totalReplacements + " 次替换");
+            "，常量传播执行了 " + totalReplacements + " 次替换");
+    }
+
+    /**
+     * 检查一个基本块是否可以到达另一个基本块
+     */
+    private boolean canReach(LLVMBasicBlockRef from, LLVMBasicBlockRef to,
+                             Map<LLVMBasicBlockRef, Set<LLVMBasicBlockRef>> successors)
+    {
+        if (from == to) return true;
+
+        Set<LLVMBasicBlockRef> visited = new HashSet<>();
+        Queue<LLVMBasicBlockRef> queue = new LinkedList<>();
+        queue.add(from);
+
+        while (!queue.isEmpty())
+        {
+            LLVMBasicBlockRef current = queue.poll();
+            if (visited.contains(current)) continue;
+            visited.add(current);
+
+            Set<LLVMBasicBlockRef> succs = successors.get(current);
+            if (succs != null)
+            {
+                for (LLVMBasicBlockRef succ : succs)
+                {
+                    if (succ == to) return true;
+                    queue.add(succ);
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 收集循环中所有被修改的变量
+     */
+    private void collectLoopModifiedVars(LLVMBasicBlockRef head, Set<String> result,
+                                         Map<LLVMBasicBlockRef, Set<String>> modifiedVars,
+                                         Map<LLVMBasicBlockRef, Set<LLVMBasicBlockRef>> successors,
+                                         Set<LLVMBasicBlockRef> visited)
+    {
+        if (visited.contains(head)) return;
+        visited.add(head);
+
+        // 添加当前基本块修改的变量
+        Set<String> modified = modifiedVars.get(head);
+        if (modified != null)
+        {
+            result.addAll(modified);
+        }
+
+        // 递归处理后继基本块，直到遇到回边
+        Set<LLVMBasicBlockRef> succs = successors.get(head);
+        if (succs != null)
+        {
+            for (LLVMBasicBlockRef succ : succs)
+            {
+                collectLoopModifiedVars(succ, result, modifiedVars, successors, visited);
+            }
+        }
+    }
+
+    /**
+     * 检查基本块是否在循环内
+     */
+    private boolean isInLoop(LLVMBasicBlockRef bb, Set<LLVMBasicBlockRef> loopHeaders,
+                             Map<LLVMBasicBlockRef, Set<LLVMBasicBlockRef>> predecessors)
+    {
+        // 简单实现：如果基本块有前驱且前驱是循环头，则认为它在循环内
+        Set<LLVMBasicBlockRef> preds = predecessors.get(bb);
+        if (preds != null)
+        {
+            for (LLVMBasicBlockRef pred : preds)
+            {
+                if (loopHeaders.contains(pred) || isInLoop(pred, loopHeaders, predecessors))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 检查变量是否在循环中被修改
+     */
+    private boolean isVarModifiedInLoop(String varName, LLVMBasicBlockRef bb,
+                                        Map<LLVMBasicBlockRef, Set<String>> modifiedVars,
+                                        Map<LLVMBasicBlockRef, Set<LLVMBasicBlockRef>> successors)
+    {
+        Set<LLVMBasicBlockRef> visited = new HashSet<>();
+        Queue<LLVMBasicBlockRef> queue = new LinkedList<>();
+        queue.add(bb);
+
+        while (!queue.isEmpty())
+        {
+            LLVMBasicBlockRef current = queue.poll();
+            if (visited.contains(current)) continue;
+            visited.add(current);
+
+            // 检查当前基本块是否修改了变量
+            Set<String> modified = modifiedVars.get(current);
+            if (modified != null && modified.contains(varName))
+            {
+                return true;
+            }
+
+            // 添加后继基本块到队列
+            Set<LLVMBasicBlockRef> succs = successors.get(current);
+            if (succs != null)
+            {
+                queue.addAll(succs);
+            }
+        }
+
+        return false;
     }
 
     /**

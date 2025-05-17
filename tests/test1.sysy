@@ -1,16 +1,10 @@
-int x = 56;
-int y = 98;
+const int width = 20;
+const int height = 10;
+int area;
 
-int main() {
-    int a = x;
-    int b = y;
-    while (b != 0) {
-        if (a > b) {
-            a = a - b;
-        } else {
-            b = b - a;
-        }
-    }
-    int result = a;
-	return result;
+int main(){
+    int length = 5;
+    int breadth = 4;
+    area = length * breadth;
+    return area;
 }

@@ -25,7 +25,7 @@ public class RegisterAllocator {
 
     public RegisterAllocator() {
         // 初始化寄存器列表 (t0-t6, s0-s11)
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 4; i++)
             availableRegisters.add("t" + i);
         for (int i = 0; i < 12; i++)
             availableRegisters.add("s" + i);

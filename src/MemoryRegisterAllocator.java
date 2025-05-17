@@ -19,10 +19,6 @@ public class MemoryRegisterAllocator {
         return globalVariables.containsKey(varName);
     }
 
-    public String getGlobalVariableLabel(String varName) {
-        return globalVariables.get(varName);
-    }
-
     public int allocateVariable(String varName) {
         int offset = currentOffset;
         variableOffsets.put(varName, offset);
@@ -47,35 +43,4 @@ public class MemoryRegisterAllocator {
         currentOffset = 0;
     }
 
-    public int getTotalSize() {
-        return currentOffset;
-    }
-
-    public String getStackPointerAdjustment() {
-        return String.format("    addi sp, sp, -%d\n", getTotalSize());
-    }
-
-    public String getStackPointerRestore() {
-        return String.format("    addi sp, sp, %d\n", getTotalSize());
-    }
-
-    public String getLoadInstruction(String varName, String reg) {
-        if (isGlobalVariable(varName)) {
-            return String.format("    la %s, %s\n    lw %s, 0(%s)\n",
-                    reg, getGlobalVariableLabel(varName), reg, reg);
-        } else {
-            int offset = getVariableOffset(varName);
-            return String.format("    lw %s, %d(sp)\n", reg, offset);
-        }
-    }
-
-    public String getStoreInstruction(String reg, String varName) {
-        if (isGlobalVariable(varName)) {
-            return String.format("    la t6, %s\n    sw %s, 0(t6)\n",
-                    getGlobalVariableLabel(varName), reg);
-        } else {
-            int offset = getVariableOffset(varName);
-            return String.format("    sw %s, %d(sp)\n", reg, offset);
-        }
-    }
 }

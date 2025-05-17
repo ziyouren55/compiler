@@ -91,26 +91,36 @@ public class RISCVCGVisitor {
                                 String ptrName = LLVMGetValueName(ptr).getString();
                                 String valueName = LLVMGetValueName(value).getString();
 
+                                // 首先检查存储目标是否为全局变量
+                                boolean isGlobalVar = LLVMIsAGlobalVariable(ptr) != null;
+
                                 if (LLVMIsAConstantInt(value) != null) {
                                     long constValue = LLVMConstIntGetSExtValue(value);
-                                    String reg = registerAllocator.getRegister(ptrName);
-                                    if (reg != null) {
-                                        int offset = memoryAllocator.getVariableOffset(ptrName);
-                                        asmCode.append(asmBuilder.emitLoadImmediate(reg, String.valueOf(constValue)));
-                                        asmCode.append(asmBuilder.emitStore(reg, String.valueOf(offset)));
+                                    // 加载常量到临时寄存器
+                                    String tempReg = "t6";
+                                    asmCode.append(asmBuilder.emitLoadImmediate(tempReg, String.valueOf(constValue)));
+
+                                    if (isGlobalVar) {
+                                        // 如果是全局变量，使用全局变量存储指令
+                                        asmCode.append(asmBuilder.emitStoreGlobal(tempReg, ptrName));
                                     } else {
-                                        String spillLoc = registerAllocator.getSpillLocation(valueName);
-                                        if (spillLoc != null) {
-                                            String tempReg = "t6";
-                                            asmCode.append(
-                                                    asmBuilder.emitLoadImmediate(tempReg, String.valueOf(constValue)));
-                                            asmCode.append(asmBuilder.emitStore(tempReg, spillLoc));
+                                        // 局部变量处理
+                                        String reg = registerAllocator.getRegister(ptrName);
+                                        if (reg != null) {
+                                            int offset = memoryAllocator.getVariableOffset(ptrName);
+                                            asmCode.append(asmBuilder.emitStore(tempReg, String.valueOf(offset)));
+                                        } else {
+                                            String spillLoc = registerAllocator.getSpillLocation(valueName);
+                                            if (spillLoc != null) {
+                                                asmCode.append(asmBuilder.emitStore(tempReg, spillLoc));
+                                            }
                                         }
                                     }
                                 } else {
+                                    // 处理非常量值的存储
                                     String reg = registerAllocator.getRegister(valueName);
                                     if (reg != null) {
-                                        if (LLVMIsAGlobalVariable(ptr) != null) {
+                                        if (isGlobalVar) {
                                             asmCode.append(asmBuilder.emitStoreGlobal(reg, ptrName));
                                         } else {
                                             int storeOffset = memoryAllocator.getVariableOffset(ptrName);
@@ -121,7 +131,7 @@ public class RISCVCGVisitor {
                                         if (spillLoc != null) {
                                             String tempReg = "t6";
                                             asmCode.append(asmBuilder.emitLoad(tempReg, spillLoc));
-                                            if (LLVMIsAGlobalVariable(ptr) != null) {
+                                            if (isGlobalVar) {
                                                 asmCode.append(asmBuilder.emitStoreGlobal(tempReg, ptrName));
                                             } else {
                                                 int storeOffset = memoryAllocator.getVariableOffset(ptrName);

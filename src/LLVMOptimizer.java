@@ -102,6 +102,9 @@ public class LLVMOptimizer
                     LLVMValueRef ptr = LLVMGetOperand(inst, 1); // 目标地址
 
                     String ptrName = LLVMGetValueName(ptr).getString();
+
+                    if(LLVMIsAGlobalVariable(ptr) != null)
+                        ptrName = "@" + ptrName;
                     memoryValues.put(ptrName, value);
                 }
                 else if (opcode == LLVMLoad)
@@ -109,6 +112,9 @@ public class LLVMOptimizer
                     // 处理load指令
                     LLVMValueRef ptr = LLVMGetOperand(inst, 0); // 源地址
                     String ptrName = LLVMGetValueName(ptr).getString();
+
+                    if(LLVMIsAGlobalVariable(ptr) != null)
+                        ptrName = "@" + ptrName;
 
                     // 检查是否有最近存储到同一位置的值
                     if (memoryValues.containsKey(ptrName))
@@ -445,6 +451,10 @@ public class LLVMOptimizer
                     {
                         LLVMValueRef ptr = LLVMGetOperand(inst, 1); // 存储目标
                         String ptrName = LLVMGetValueName(ptr).getString();
+
+                        if(LLVMIsAGlobalVariable(ptr) != null)
+                            ptrName = "@" + ptrName;
+
                         variablesAssignedInBranches.add(ptrName);
 //                        System.out.println("在条件分支中发现变量赋值: " + ptrName);
                     }
@@ -467,6 +477,9 @@ public class LLVMOptimizer
                 {
                     LLVMValueRef ptr = LLVMGetOperand(inst, 1); // 目标地址
                     String ptrName = LLVMGetValueName(ptr).getString();
+
+                    if(LLVMIsAGlobalVariable(ptr) != null)
+                        ptrName = "@" + ptrName;
 
                     // 记录所有被修改的变量，包括全局变量
                     modified.add(ptrName);
@@ -531,6 +544,8 @@ public class LLVMOptimizer
 
                         if (LLVMIsAConstant(value) != null)
                         {
+                            if(LLVMIsAGlobalVariable(ptr) != null)
+                                ptrName = "@" + ptrName;
                             constantValues.put(ptrName, value);
                         }
                         else
@@ -550,6 +565,9 @@ public class LLVMOptimizer
                         // load指令处理 - 修改这部分以检查变量是否在条件分支中被赋值
                         LLVMValueRef ptr = LLVMGetOperand(inst, 0);
                         String ptrName = LLVMGetValueName(ptr).getString();
+
+                        if(LLVMIsAGlobalVariable(ptr) != null)
+                            ptrName = "@" + ptrName;
 
                         boolean inLoop = isInLoop(bb, loopHeaders, predecessors);
                         boolean varModifiedInLoop = false;

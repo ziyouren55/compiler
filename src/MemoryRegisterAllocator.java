@@ -27,9 +27,6 @@ public class MemoryRegisterAllocator {
     }
 
     public int getVariableOffset(String varName) {
-        if (isGlobalVariable(varName)) {
-            throw new IllegalArgumentException("Variable " + varName + " is a global variable");
-        }
 
         Integer offset = variableOffsets.get(varName);
         if (offset == null) {

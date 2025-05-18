@@ -51,13 +51,21 @@ public class LLVMOptimizer {
         for (LLVMValueRef func = LLVMGetFirstFunction(module); func != null; func = LLVMGetNextFunction(func)) {
 
             // 跳过外部函数
-            if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0) {
-                optimizeFunction(func);
-                eliminateRedundantLoads(func);
-                eliminateDeadStores(func);
-//                propagateConstants(func);
-                simplifyBranchConditions(func);
-                // fixGlobalVariableUpdates(func);
+            if (LLVMIsAFunction(func) != null) {
+                if(LLVMCountBasicBlocks(func) == 1)
+                {
+                    optimizeFunction(func);
+                    eliminateRedundantLoads(func);
+                    eliminateDeadStores(func);
+                    propagateConstants(func);
+//                    simplifyBranchConditions(func);
+                    // fixGlobalVariableUpdates(func);
+                }
+                else if(LLVMCountBasicBlocks(func) > 1)
+                {
+                    simplifyBranchConditions(func);
+                }
+
             }
         }
 

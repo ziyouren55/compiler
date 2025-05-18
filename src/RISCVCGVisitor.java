@@ -1,4 +1,3 @@
-import org.llvm4j.llvm4j.*;
 import org.bytedeco.llvm.LLVM.*;
 import org.llvm4j.llvm4j.Module;
 
@@ -101,49 +100,100 @@ public class RISCVCGVisitor {
                                 // 首先检查存储目标是否为全局变量
                                 boolean isGlobalVar = LLVMIsAGlobalVariable(ptr) != null;
 
-                                if (LLVMIsAConstantInt(value) != null) {
+                                if (LLVMIsAConstantInt(value) != null)
+                                {
                                     long constValue = LLVMConstIntGetSExtValue(value);
                                     // 加载常量到临时寄存器
                                     String tempReg = "t6";
                                     asmCode.append(asmBuilder.emitLoadImmediate(tempReg, String.valueOf(constValue)));
 
-                                    if (isGlobalVar) {
+                                    if (isGlobalVar)
+                                    {
                                         // 如果是全局变量，使用全局变量存储指令
                                         asmCode.append(asmBuilder.emitStoreGlobal(tempReg, ptrName));
-                                    } else {
+                                    }
+                                    else
+                                    {
                                         // 局部变量处理
                                         String reg = registerAllocator.getRegister(ptrName);
-                                        if (reg != null) {
-                                            int offset = memoryAllocator.getVariableOffset(ptrName);
-                                            asmCode.append(asmBuilder.emitStore(tempReg, String.valueOf(offset)));
-                                        } else {
-                                            String spillLoc = registerAllocator.getSpillLocation(valueName);
-                                            if (spillLoc != null) {
+                                        if (reg != null)
+                                        {
+                                            //变量存在于寄存器
+                                            asmCode.append(asmBuilder.emitAssignment(reg, tempReg));
+                                        }
+                                        else
+                                        {
+                                            //变量被溢出到栈上
+                                            String spillLoc = registerAllocator.getSpillLocation(ptrName);
+                                            if (spillLoc != null)
+                                            {
                                                 asmCode.append(asmBuilder.emitStore(tempReg, spillLoc));
                                             }
                                         }
                                     }
-                                } else {
+                                }
+                                else
+                                {
                                     // 处理非常量值的存储
                                     String reg = registerAllocator.getRegister(valueName);
-                                    if (reg != null) {
-                                        if (isGlobalVar) {
+                                    if (reg != null)
+                                    {
+                                        String tempReg = "t6";
+                                        //值存在于寄存器
+                                        if (isGlobalVar)
+                                        {
                                             asmCode.append(asmBuilder.emitStoreGlobal(reg, ptrName));
-                                        } else {
-                                            int storeOffset = memoryAllocator.getVariableOffset(ptrName);
-                                            asmCode.append(asmBuilder.emitStore(reg, String.valueOf(storeOffset)));
                                         }
-                                    } else {
-                                        String spillLoc = registerAllocator.getSpillLocation(valueName);
-                                        if (spillLoc != null) {
+                                        else
+                                        {
+                                            String reg_ptr = registerAllocator.getRegister(ptrName);
+                                            if (reg_ptr != null)
+                                            {
+                                                //变量存在于寄存器
+                                                asmCode.append(asmBuilder.emitAssignment(reg_ptr, reg));
+                                            }
+                                            else
+                                            {
+                                                //变量被溢出到栈上
+                                                String spillLoc = registerAllocator.getSpillLocation(ptrName);
+                                                if (spillLoc != null)
+                                                {
+                                                    asmCode.append(asmBuilder.emitStore(reg, spillLoc));
+                                                }
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        //值在栈上
+                                        String spillLoc_value = registerAllocator.getSpillLocation(valueName);
+                                        if (spillLoc_value != null)
+                                        {
                                             String tempReg = "t6";
-                                            asmCode.append(asmBuilder.emitLoad(tempReg, spillLoc));
-                                            if (isGlobalVar) {
+                                            if (isGlobalVar)
+                                            {
+                                                asmCode.append(asmBuilder.emitLoad(tempReg,spillLoc_value));
                                                 asmCode.append(asmBuilder.emitStoreGlobal(tempReg, ptrName));
-                                            } else {
-                                                int storeOffset = memoryAllocator.getVariableOffset(ptrName);
-                                                asmCode.append(
-                                                        asmBuilder.emitStore(tempReg, String.valueOf(storeOffset)));
+                                            }
+                                            else
+                                            {
+                                                String reg_ptr = registerAllocator.getRegister(ptrName);
+                                                if (reg_ptr != null)
+                                                {
+                                                    //变量存在于寄存器
+                                                    asmCode.append(asmBuilder.emitAssignment(reg_ptr, spillLoc_value));
+                                                }
+                                                else
+                                                {
+                                                    //变量被溢出到栈上
+                                                    String spillLoc_ptr = registerAllocator.getSpillLocation(ptrName);
+                                                    if (spillLoc_ptr != null)
+                                                    {
+                                                        String tempReg2 = "t5";
+                                                        asmCode.append(asmBuilder.emitLoad(tempReg2, spillLoc_value));
+                                                        asmCode.append(asmBuilder.emitStore(tempReg2, spillLoc_ptr));
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -153,29 +203,70 @@ public class RISCVCGVisitor {
 
                         case LLVMLoad:
                             if (operandNum == 1) {
-                                LLVMValueRef ptr = LLVMGetOperand(inst, 0);
-                                String ptrName = LLVMGetValueName(ptr).getString();
-                                String resultName = LLVMGetValueName(inst).getString();
-                                String reg = registerAllocator.getRegister(resultName);
+                                LLVMValueRef src = LLVMGetOperand(inst, 0);
+                                String src_name = LLVMGetValueName(src).getString();
+                                String result_name = LLVMGetValueName(inst).getString();
+                                String reg_result = registerAllocator.getRegister(result_name);
+                                String reg_src = registerAllocator.getRegister(src_name);
 
-                                if (reg != null) {
-                                    if (LLVMIsAGlobalVariable(ptr) != null) {
-                                        asmCode.append(asmBuilder.emitLoadGlobal(reg, ptrName));
-                                    } else {
-                                        int loadOffset = memoryAllocator.getVariableOffset(ptrName);
-                                        asmCode.append(asmBuilder.emitLoad(reg, String.valueOf(loadOffset)));
+                                if (reg_result != null)
+                                {
+                                    //目的在寄存器上
+                                    if (LLVMIsAGlobalVariable(src) != null)
+                                    {
+                                        asmCode.append(asmBuilder.emitLoadGlobal(reg_result, src_name));
                                     }
-                                } else {
-                                    String spillLoc = registerAllocator.getSpillLocation(resultName);
-                                    if (spillLoc != null) {
+                                    else
+                                    {
+                                        if (reg_src != null)
+                                            {
+                                                //源存在于寄存器
+                                                asmCode.append(asmBuilder.emitAssignment(reg_result, reg_src));
+                                            }
+                                            else
+                                            {
+                                                //源被溢出到栈上
+                                                String spillLoc_src = registerAllocator.getSpillLocation(src_name);
+                                                if (spillLoc_src != null)
+                                                {
+                                                    String tempReg = "t5";
+                                                    asmCode.append(asmBuilder.emitLoad(tempReg,spillLoc_src));
+                                                    asmCode.append(asmBuilder.emitAssignment(reg_result,tempReg));
+                                                }
+                                            }
+                                    }
+                                }
+                                else
+                                {
+                                    //目的被溢出
+                                    String spillLoc_result = registerAllocator.getSpillLocation(result_name);
+                                    if (spillLoc_result != null)
+                                    {
                                         String tempReg = "t6";
-                                        if (LLVMIsAGlobalVariable(ptr) != null) {
-                                            asmCode.append(asmBuilder.emitLoadGlobal(tempReg, ptrName));
-                                        } else {
-                                            int loadOffset = memoryAllocator.getVariableOffset(ptrName);
-                                            asmCode.append(asmBuilder.emitLoad(tempReg, String.valueOf(loadOffset)));
+                                        if (LLVMIsAGlobalVariable(src) != null)
+                                        {
+                                            asmCode.append(asmBuilder.emitLoadGlobal(tempReg, src_name));
+                                            asmCode.append(asmBuilder.emitStore(tempReg,spillLoc_result));
                                         }
-                                        asmCode.append(asmBuilder.emitStore(tempReg, spillLoc));
+                                        else
+                                        {
+                                            if (reg_src != null)
+                                            {
+                                                //源存在于寄存器
+                                                asmCode.append(asmBuilder.emitAssignment(tempReg, reg_src));
+                                                asmCode.append(asmBuilder.emitStore(tempReg,spillLoc_result));
+                                            }
+                                            else
+                                            {
+                                                //源被溢出到栈上
+                                                String spillLoc_src = registerAllocator.getSpillLocation(src_name);
+                                                if (spillLoc_src != null)
+                                                {
+                                                    asmCode.append(asmBuilder.emitLoad(tempReg,spillLoc_src));
+                                                    asmCode.append(asmBuilder.emitStore(tempReg, spillLoc_result));
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

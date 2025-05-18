@@ -290,52 +290,74 @@ public class RISCVCGVisitor {
                                 String op1Reg = registerAllocator.getRegister(op1Name);
                                 String op2Reg = registerAllocator.getRegister(op2Name);
 
-                                if (resultReg != null) {
-                                    if (LLVMIsAConstantInt(op1) != null) {
+                                if (resultReg != null)
+                                {
+                                    if (LLVMIsAConstantInt(op1) != null)
+                                    {
                                         long constValue = LLVMConstIntGetSExtValue(op1);
                                         asmCode.append(
-                                                asmBuilder.emitLoadImmediate(resultReg, String.valueOf(constValue)));
-                                    } else if (op1Reg != null) {
+                                            asmBuilder.emitLoadImmediate(resultReg, String.valueOf(constValue)));
+                                    }
+                                    else if (op1Reg != null)
+                                    {
                                         asmCode.append(asmBuilder.emitAssignment(resultReg, op1Reg));
-                                    } else {
+                                    }
+                                    else
+                                    {
                                         String spillLoc = registerAllocator.getSpillLocation(op1Name);
-                                        if (spillLoc != null) {
+                                        if (spillLoc != null)
+                                        {
                                             asmCode.append(asmBuilder.emitLoad(resultReg, spillLoc));
                                         }
                                     }
 
-                                    if (LLVMIsAConstantInt(op2) != null) {
+                                    if (LLVMIsAConstantInt(op2) != null)
+                                    {
                                         long constValue = LLVMConstIntGetSExtValue(op2);
                                         String tempReg = "t6";
                                         asmCode.append(
-                                                asmBuilder.emitLoadImmediate(tempReg, String.valueOf(constValue)));
+                                            asmBuilder.emitLoadImmediate(tempReg, String.valueOf(constValue)));
                                         asmCode.append(asmBuilder.emitBinaryOperation(getOperation(opcode), resultReg,
-                                                resultReg, tempReg));
-                                    } else if (op2Reg != null) {
+                                            resultReg, tempReg));
+                                    }
+                                    else if (op2Reg != null)
+                                    {
                                         asmCode.append(asmBuilder.emitBinaryOperation(getOperation(opcode), resultReg,
-                                                resultReg, op2Reg));
-                                    } else {
+                                            resultReg, op2Reg));
+                                    }
+                                    else
+                                    {
                                         String spillLoc = registerAllocator.getSpillLocation(op2Name);
-                                        if (spillLoc != null) {
+                                        if (spillLoc != null)
+                                        {
                                             String tempReg = "t6";
                                             asmCode.append(asmBuilder.emitLoad(tempReg, spillLoc));
                                             asmCode.append(asmBuilder.emitBinaryOperation(getOperation(opcode),
-                                                    resultReg, resultReg, tempReg));
+                                                resultReg, resultReg, tempReg));
                                         }
                                     }
-                                } else {
+                                }
+                                else
+                                {
                                     String spillLoc = registerAllocator.getSpillLocation(resultName);
-                                    if (spillLoc != null) {
+                                    if (spillLoc != null)
+                                    {
                                         String tempReg = "t6";
-                                        if (LLVMIsAConstantInt(op1) != null) {
+                                        if (LLVMIsAConstantInt(op1) != null)
+                                        {
                                             long constValue = LLVMConstIntGetSExtValue(op1);
                                             asmCode.append(
-                                                    asmBuilder.emitLoadImmediate(tempReg, String.valueOf(constValue)));
-                                        } else if (op1Reg != null) {
+                                                asmBuilder.emitLoadImmediate(tempReg, String.valueOf(constValue)));
+                                        }
+                                        else if (op1Reg != null)
+                                        {
                                             asmCode.append(asmBuilder.emitAssignment(tempReg, op1Reg));
-                                        } else {
+                                        }
+                                        else
+                                        {
                                             String op1SpillLoc = registerAllocator.getSpillLocation(op1Name);
-                                            if (op1SpillLoc != null) {
+                                            if (op1SpillLoc != null)
+                                            {
                                                 asmCode.append(asmBuilder.emitLoad(tempReg, op1SpillLoc));
                                             }
                                         }
@@ -353,13 +375,16 @@ public class RISCVCGVisitor {
                                         {
                                             asmCode.append(asmBuilder.emitBinaryOperation(getOperation(opcode), tempReg,
                                                 tempReg, op2Reg));
-                                        } else {
+                                        }
+                                        else
+                                        {
                                             String op2SpillLoc = registerAllocator.getSpillLocation(op2Name);
-                                            if (op2SpillLoc != null) {
+                                            if (op2SpillLoc != null)
+                                            {
                                                 String tempReg2 = "t5";
                                                 asmCode.append(asmBuilder.emitLoad(tempReg2, op2SpillLoc));
                                                 asmCode.append(asmBuilder.emitBinaryOperation(getOperation(opcode),
-                                                        tempReg, tempReg, tempReg2));
+                                                    tempReg, tempReg, tempReg2));
                                             }
                                         }
                                         asmCode.append(asmBuilder.emitStore(tempReg, spillLoc));
@@ -552,9 +577,9 @@ public class RISCVCGVisitor {
                 // 收集使用点
                 for (int i = 0; i < operandNum; i++) {
                     LLVMValueRef operand = LLVMGetOperand(inst, i);
-//                    if (LLVMIsAGlobalVariable(operand) != null)
-//                        continue;
-//
+                    if (LLVMIsAGlobalVariable(operand) != null)
+                        continue;
+
                     if (LLVMIsAConstantInt(operand) == null) {
                         String varName = LLVMGetValueName(operand).getString();
                         if (!varName.isEmpty()) {

@@ -55,7 +55,7 @@ public class LLVMOptimizer {
                 optimizeFunction(func);
                 eliminateRedundantLoads(func);
                 eliminateDeadStores(func);
-                // propagateConstants(func);
+//                propagateConstants(func);
                 simplifyBranchConditions(func);
                 // fixGlobalVariableUpdates(func);
             }

@@ -577,13 +577,13 @@ public class RISCVCGVisitor {
                 // 收集使用点
                 for (int i = 0; i < operandNum; i++) {
                     LLVMValueRef operand = LLVMGetOperand(inst, i);
-                    if (LLVMIsAGlobalVariable(operand) != null)
-                        continue;
 
                     if (LLVMIsAConstantInt(operand) == null) {
                         String varName = LLVMGetValueName(operand).getString();
                         if (!varName.isEmpty()) {
                             // 更新最后使用点
+                            if (LLVMIsAGlobalVariable(operand) != null)
+                                    varName = "@" + varName;
                             varLastUsePoints.put(varName, currentPosition);
                             // 如果是第一次使用，记录为定义点
                             if (!varDefPoints.containsKey(varName)) {

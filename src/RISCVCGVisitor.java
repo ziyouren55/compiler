@@ -181,7 +181,8 @@ public class RISCVCGVisitor {
                                                 if (reg_ptr != null)
                                                 {
                                                     //变量存在于寄存器
-                                                    asmCode.append(asmBuilder.emitAssignment(reg_ptr, spillLoc_value));
+                                                    asmCode.append(asmBuilder.emitLoad(tempReg,spillLoc_value));
+                                                    asmCode.append(asmBuilder.emitAssignment(reg_ptr, tempReg));
                                                 }
                                                 else
                                                 {

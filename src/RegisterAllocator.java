@@ -43,8 +43,6 @@ public class RegisterAllocator {
         sorted.sort(Comparator.comparingInt(i -> i.start));
 
         for (LiveInterval current : sorted) {
-            if(current.varName.startsWith("@"))
-                continue;
             expireOldIntervals(current.start);
 
             if (availableRegisters.isEmpty()) {

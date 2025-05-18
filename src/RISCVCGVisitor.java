@@ -582,8 +582,8 @@ public class RISCVCGVisitor {
                         String varName = LLVMGetValueName(operand).getString();
                         if (!varName.isEmpty()) {
                             // 更新最后使用点
-                            if (LLVMIsAGlobalVariable(operand) != null)
-                                    varName = "@" + varName;
+//                            if (LLVMIsAGlobalVariable(operand) != null)
+//                                    varName = "@" + varName;
                             varLastUsePoints.put(varName, currentPosition);
                             // 如果是第一次使用，记录为定义点
                             if (!varDefPoints.containsKey(varName)) {

@@ -59,10 +59,10 @@ public class LLVMOptimizer
             // 跳过外部函数
             if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0)
             {
-//                optimizeFunction(func);
-//                eliminateDeadStores(func);
+                optimizeFunction(func);
+                eliminateDeadStores(func);
 //                propagateConstants(func);
-//                simplifyBranchConditions(func);
+                simplifyBranchConditions(func);
                 // fixGlobalVariableUpdates(func);
             }
         }

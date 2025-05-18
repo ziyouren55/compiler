@@ -402,85 +402,6 @@ public class RISCVCGVisitor {
                             }
                             break;
 
-                        case LLVMCall:
-                            // 处理函数调用指令
-                            String callResultName = LLVMGetValueName(inst).getString();
-
-                            // 获取被调用的函数
-                            LLVMValueRef calledFunc = null;
-                            try {
-                                // 尝试获取被调用的函数
-                                for (int i = 0; i < operandNum; i++) {
-                                    LLVMValueRef op = LLVMGetOperand(inst, i);
-                                    if (LLVMIsAFunction(op) != null) {
-                                        calledFunc = op;
-                                        break;
-                                    }
-                                }
-                            } catch (Exception e) {
-                                System.err.println("警告：无法获取被调用的函数：" + e.getMessage());
-                            }
-
-                            // 获取函数名
-                            String calledFuncName = "<未知函数>";
-                            if (calledFunc != null) {
-                                calledFuncName = LLVMGetValueName(calledFunc).getString();
-                            }
-
-                            // 收集函数参数
-                            List<String> args = new ArrayList<>();
-                            int argIndex = 0;
-
-                            // 跳过第一个操作数（被调用的函数）
-                            for (int i = 1; i < operandNum; i++) {
-                                LLVMValueRef arg = LLVMGetOperand(inst, i);
-
-                                // 根据参数类型处理
-                                if (LLVMIsAConstantInt(arg) != null) {
-                                    // 常量参数
-                                    long constValue = LLVMConstIntGetSExtValue(arg);
-                                    String tempReg = "t" + (argIndex % 6); // 使用临时寄存器t0-t5
-                                    asmCode.append(asmBuilder.emitLoadImmediate(tempReg, String.valueOf(constValue)));
-                                    args.add(tempReg);
-                                } else {
-                                    // 变量参数
-                                    String argName = LLVMGetValueName(arg).getString();
-                                    String argReg = registerAllocator.getRegister(argName);
-
-                                    if (argReg != null) {
-                                        args.add(argReg);
-                                    } else {
-                                        // 处理溢出到栈的情况
-                                        String spillLoc = registerAllocator.getSpillLocation(argName);
-                                        if (spillLoc != null) {
-                                            String tempReg = "t" + (argIndex % 6);
-                                            asmCode.append(asmBuilder.emitLoad(tempReg, spillLoc));
-                                            args.add(tempReg);
-                                        }
-                                    }
-                                }
-
-                                argIndex++;
-                            }
-
-                            // 生成函数调用
-                            asmCode.append(asmBuilder.emitFunctionCall(calledFuncName, args));
-
-                            // 处理返回值
-                            if (callResultName != null && !callResultName.isEmpty()) {
-                                String resultReg = registerAllocator.getRegister(callResultName);
-                                if (resultReg != null) {
-                                    // 将a0(返回值寄存器)移动到目标寄存器
-                                    asmCode.append(asmBuilder.emitAssignment(resultReg, "a0"));
-                                } else {
-                                    // 处理溢出到栈的情况
-                                    String spillLoc = registerAllocator.getSpillLocation(callResultName);
-                                    if (spillLoc != null) {
-                                        asmCode.append(asmBuilder.emitStore("a0", spillLoc));
-                                    }
-                                }
-                            }
-                            break;
 
                         case LLVMICmp:
                             if (operandNum == 2) {
@@ -631,6 +552,9 @@ public class RISCVCGVisitor {
                 // 收集使用点
                 for (int i = 0; i < operandNum; i++) {
                     LLVMValueRef operand = LLVMGetOperand(inst, i);
+//                    if (LLVMIsAGlobalVariable(operand) != null)
+//                        continue;
+//
                     if (LLVMIsAConstantInt(operand) == null) {
                         String varName = LLVMGetValueName(operand).getString();
                         if (!varName.isEmpty()) {

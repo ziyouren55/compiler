@@ -30,7 +30,7 @@ public class RegisterAllocator {
             availableRegisters.add("t" + i);
         for (int i = 0; i < 12; i++)
             availableRegisters.add("s" + i);
-        for (int i = 1; i < 8; i++)
+        for (int i = 0; i < 8; i++)
             availableRegisters.add("a" + i);
     }
 

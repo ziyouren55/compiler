@@ -38,16 +38,16 @@ public class Main {
         LLVMOptimizer llvmOptimizer = new LLVMOptimizer(module.getRef());
         LLVMModuleRef opMod = llvmOptimizer.optimize();
         module = new Module(opMod);
-//        module.dump(Option.of(new File(op_ll_output)));
+        module.dump(Option.of(new File(output)));
 
         // 生成RISC-V汇编代码
-        RISCVCGVisitor riscvVisitor = new RISCVCGVisitor(module);
-        String asmCode = riscvVisitor.generateCode();
-
-        // 写入输出文件
-        try (FileWriter writer = new FileWriter(output)) {
-            writer.write(asmCode);
-        }
+//        RISCVCGVisitor riscvVisitor = new RISCVCGVisitor(module);
+//        String asmCode = riscvVisitor.generateCode();
+//
+//        // 写入输出文件
+//        try (FileWriter writer = new FileWriter(output)) {
+//            writer.write(asmCode);
+//        }
 
     }
 

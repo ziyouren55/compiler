@@ -33,7 +33,7 @@ public class Main {
         llvmirVisitor.visit(tree);
 
         Module module = llvmirVisitor.getMod();
-        module.dump(Option.of(new File(ll_output)));
+//        module.dump(Option.of(new File(ll_output)));
 
         // 使用新的Lab6优化器
         LLVMOptimizerForLab6 llvmOptimizer = new LLVMOptimizerForLab6(module.getRef());

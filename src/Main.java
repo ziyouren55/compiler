@@ -14,8 +14,7 @@ import java.io.IOException;
 //java -jar rars.jar tests/output.asm a0
 public class Main {
 
-    public static void main(String[] args) throws IOException
-    {
+    public static void main(String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("input and output path is required");
         }
@@ -26,34 +25,34 @@ public class Main {
         CharStream input = CharStreams.fromFileName(source);
 
         CommonTokenStream tokens = lexerAnalysis(input);
-        SysYParser       parser = new SysYParser(tokens);
-        ParseTree        tree   = parser.compUnit();
+        SysYParser parser = new SysYParser(tokens);
+        ParseTree tree = parser.compUnit();
 
         // 生成LLVM IR
         LLVMIRVisitor llvmirVisitor = new LLVMIRVisitor();
         llvmirVisitor.visit(tree);
 
         Module module = llvmirVisitor.getMod();
-//        module.dump(Option.of(new File(ll_output)));
-        LLVMOptimizer llvmOptimizer = new LLVMOptimizer(module.getRef());
+        module.dump(Option.of(new File(ll_output)));
+
+        // 使用新的Lab6优化器
+        LLVMOptimizerForLab6 llvmOptimizer = new LLVMOptimizerForLab6(module.getRef());
         LLVMModuleRef opMod = llvmOptimizer.optimize();
         module = new Module(opMod);
         module.dump(Option.of(new File(output)));
 
         // 生成RISC-V汇编代码
-//        RISCVCGVisitor riscvVisitor = new RISCVCGVisitor(module);
-//        String asmCode = riscvVisitor.generateCode();
-//
-//        // 写入输出文件
-//        try (FileWriter writer = new FileWriter(output)) {
-//            writer.write(asmCode);
-//        }
+        // RISCVCGVisitor riscvVisitor = new RISCVCGVisitor(module);
+        // String asmCode = riscvVisitor.generateCode();
+        //
+        // // 写入输出文件
+        // try (FileWriter writer = new FileWriter(output)) {
+        // writer.write(asmCode);
+        // }
 
     }
 
-
-    public static CommonTokenStream lexerAnalysis(CharStream input)
-    {
+    public static CommonTokenStream lexerAnalysis(CharStream input) {
         SysYLexer sysYLexer = new SysYLexer(input);
 
         MyErrorListener errorListener = new MyErrorListener();
@@ -63,28 +62,27 @@ public class Main {
         CommonTokenStream tokens = new CommonTokenStream(sysYLexer);
         tokens.fill(); // 预加载所有 token
 
-//        else
-//        {
-//            for (Token token : tokens.getTokens())
-//            {
-//                if (token.getType() == SysYLexer.EOF)
-//                {
-//                    continue;  // Skip EOF token
-//                }
-//
-//                String tokenText = token.getText();
-//                if(token.getType() == SysYLexer.INTEGER_CONST)
-//                {
-//                    tokenText = convertToDecimal(tokenText);
-//                }
-//                String tokenStr = SysYLexer.VOCABULARY.getSymbolicName(token.getType()) + " " + tokenText + " at Line " + token.getLine() + ".";
-//                System.err.println(tokenStr);
-//            }
-//        }
+        // else
+        // {
+        // for (Token token : tokens.getTokens())
+        // {
+        // if (token.getType() == SysYLexer.EOF)
+        // {
+        // continue; // Skip EOF token
+        // }
+        //
+        // String tokenText = token.getText();
+        // if(token.getType() == SysYLexer.INTEGER_CONST)
+        // {
+        // tokenText = convertToDecimal(tokenText);
+        // }
+        // String tokenStr = SysYLexer.VOCABULARY.getSymbolicName(token.getType()) + " "
+        // + tokenText + " at Line " + token.getLine() + ".";
+        // System.err.println(tokenStr);
+        // }
+        // }
 
         return tokens;
     }
-
-
 
 }

@@ -53,7 +53,7 @@ public class LLVMOptimizerForLab6 {
         boolean changed = false;
         int iterationCount = 0;
         final int MAX_ITERATIONS = 10; // 设置最大迭代次数，防止意外的无限循环
-        new Module(module).dump(Option.of(new File(ll_output)));
+//        new Module(module).dump(Option.of(new File(ll_output)));
 
         do {
 

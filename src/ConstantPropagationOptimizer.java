@@ -71,80 +71,102 @@ public class ConstantPropagationOptimizer {
 
             return this.type == other.type;
         }
+
+        /**
+         * 实现meet操作，类似于ValueLattice中的meet方法
+         */
+        public static FlowValue meet(FlowValue a, FlowValue b) {
+            if (a.isUndef())
+                return b;
+            if (b.isUndef())
+                return a;
+            if (a.isNac() || b.isNac())
+                return FlowValue.nac();
+
+            // 都是常量，如果相等返回其中一个，否则返回NAC
+            if (a.isConstant() && b.isConstant()) {
+                if (a.getConstValue().equals(b.getConstValue())) {
+                    return a;
+                } else {
+                    return FlowValue.nac();
+                }
+            }
+
+            return FlowValue.nac();
+        }
     }
 
-    private static class InstructionState
-    {
-        // 指令的输入值映射（变量名 -> FlowValue）
-        private Map<String, FlowValue> inValues;
-        // 指令的输出值（如果有）
-        private Map<String, FlowValue> outValue;
-        // 指令引用的变量名列表（输入）
-        private Set<String> uses;
-        // 指令定义的变量名（输出，如果有）
-        private String def;
+    /**
+     * 指令状态类，包含指令引用及其对应的in和out值
+     */
+    private static class InstructionState {
+        private LLVMValueRef instruction; // 指令引用
+        private Map<String, FlowValue> inValues; // 输入数据流值，变量名 -> 值
+        private Map<String, FlowValue> outValues; // 输出数据流值，变量名 -> 值
+        private String instructionString; // 指令的字符串表示
 
-        public InstructionState()
-        {
+        public InstructionState(LLVMValueRef instruction) {
+            this.instruction = instruction;
             this.inValues = new HashMap<>();
-            this.outValue = new HashMap<>();
-            this.uses = new HashSet<>();
-            this.def = null;
+            this.outValues = new HashMap<>();
+            this.instructionString = LLVMPrintValueToString(instruction).getString();
         }
 
-        public void addUse(String varName)
-        {
-            uses.add(varName);
+        public LLVMValueRef getInstruction() {
+            return instruction;
         }
 
-        public void setDef(String varName)
-        {
-            this.def = varName;
+        public String getInstructionString() {
+            return instructionString;
         }
 
-        public Set<String> getUses()
-        {
-            return uses;
+        public FlowValue getInValue(String var) {
+            return inValues.getOrDefault(var, FlowValue.undef());
         }
 
-        public String getDef()
-        {
-            return def;
+        public void setInValue(String var, FlowValue value) {
+            inValues.put(var, value);
         }
 
-        public void setInValue(String varName, FlowValue value)
-        {
-            inValues.put(varName, value);
-        }
-
-        public Map<String, FlowValue> getInValue(String varName)
-        {
+        public Map<String, FlowValue> getAllInValues() {
             return inValues;
         }
 
-        public void setOutValue(String varName, FlowValue value)
-        {
-            outValue.put(varName, value);
+        public FlowValue getOutValue(String var) {
+            return outValues.getOrDefault(var, FlowValue.undef());
         }
 
-        public Map<String, FlowValue> getOutValue()
-        {
-            return outValue;
+        public void setOutValue(String var, FlowValue value) {
+            outValues.put(var, value);
+        }
+
+        public Map<String, FlowValue> getAllOutValues() {
+            return outValues;
+        }
+
+        public void setAllOutValues(Map<String, FlowValue> values) {
+            for (Map.Entry<String, FlowValue> entry : values.entrySet()) {
+                outValues.put(entry.getKey(), entry.getValue());
+            }
         }
 
         @Override
-        public boolean equals(Object obj)
-        {
+        public boolean equals(Object obj) {
             if (!(obj instanceof InstructionState))
                 return false;
             InstructionState other = (InstructionState) obj;
 
-            // 比较输入值映射
-            if (!this.inValues.equals(other.inValues))
-                return false;
+            return this.instruction.equals(other.instruction);
+        }
 
-            // 比较输出值
-            return this.outValue.equals(other.outValue);
+        @Override
+        public int hashCode() {
+            return instruction.hashCode();
+        }
+
+        @Override
+        public String toString() {
+            return instructionString;
         }
     }
 
@@ -152,27 +174,38 @@ public class ConstantPropagationOptimizer {
     private Set<String> globalVariables = new HashSet<>();
     private Map<String, FlowValue> memoryValues = new HashMap<>();
 
-    // 添加这两个全局映射
+    // 控制流图：前驱和后继映射
+    private Map<InstructionState, List<InstructionState>> preds = new HashMap<>();
+    private Map<InstructionState, List<InstructionState>> succs = new HashMap<>();
+
+    // 指令状态映射：LLVMValueRef -> InstructionState
+    private Map<LLVMValueRef, InstructionState> instructionStates = new HashMap<>();
+
+    // 添加一个有序的指令状态列表，保持原始的指令顺序
+    private List<InstructionState> orderedInstructionStates = new ArrayList<>();
+
+    // 局部"只写一次且写常量"的映射：alloca -> CONST(c)
+    private Map<LLVMValueRef, FlowValue> singleStoreLocals = new HashMap<>();
+
+    // 全局"只写一次且写常量"的映射：@g -> CONST(c)
+    private Map<LLVMValueRef, FlowValue> singleStoreGlobals = new HashMap<>();
+
+    // 指令字符串到值的映射
     private Map<String, LLVMValueRef> instructionStringToValue = new HashMap<>();
     private Map<LLVMValueRef, String> instructionValueToString = new HashMap<>();
 
-    private void recordAllInstructions()
-    {
+    /**
+     * 记录所有指令的字符串表示和引用之间的映射
+     */
+    private void recordAllInstructions() {
         instructionStringToValue.clear();
         instructionValueToString.clear();
 
-        // 遍历所有函数
-        for (LLVMValueRef func = LLVMGetFirstFunction(module); func != null; func = LLVMGetNextFunction(func))
-        {
-            // 跳过外部函数声明
-            if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0)
-            {
-                // 遍历所有基本块
-                for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb))
-                {
-                    // 遍历所有指令
-                    for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst))
-                    {
+        for (LLVMValueRef func = LLVMGetFirstFunction(module); func != null; func = LLVMGetNextFunction(func)) {
+            if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0) {
+                for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
+                    for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(
+                            inst)) {
                         String instStr = LLVMPrintValueToString(inst).getString();
                         instructionStringToValue.put(instStr, inst);
                         instructionValueToString.put(inst, instStr);
@@ -181,6 +214,92 @@ public class ConstantPropagationOptimizer {
             }
         }
     }
+
+    /**
+     * 收集只写一次的局部变量
+     */
+    private void collectSingleStoreLocals() {
+        // alloca -> [store指令] 映射
+        Map<LLVMValueRef, List<LLVMValueRef>> storeMap = new HashMap<>();
+
+        for (LLVMValueRef func = LLVMGetFirstFunction(module); func != null
+                && LLVMIsDeclaration(func) == 0; func = LLVMGetNextFunction(func)) {
+
+            for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
+
+                for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(
+                        inst)) {
+
+                    if (LLVMIsAStoreInst(inst) != null) {
+                        LLVMValueRef val = LLVMGetOperand(inst, 0);
+                        LLVMValueRef ptr = LLVMGetOperand(inst, 1);
+
+                        if (LLVMIsAAllocaInst(ptr) != null) {
+                            storeMap.computeIfAbsent(ptr, k -> new ArrayList<>()).add(inst);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 遍历所有 alloca -> store 列表，筛选出只写一次且是常量
+        for (Map.Entry<LLVMValueRef, List<LLVMValueRef>> entry : storeMap.entrySet()) {
+            LLVMValueRef alloca = entry.getKey();
+            List<LLVMValueRef> stores = entry.getValue();
+
+            if (stores.size() == 1) {
+                LLVMValueRef storeInst = stores.get(0);
+                LLVMValueRef val = LLVMGetOperand(storeInst, 0);
+                if (LLVMIsAConstantInt(val) != null) {
+                    long c = LLVMConstIntGetSExtValue(val);
+                    singleStoreLocals.put(alloca, FlowValue.constant((int) c));
+                }
+            }
+        }
+    }
+
+    /**
+     * 收集只写一次的全局变量
+     */
+    private void collectSingleStoreGlobals() {
+        // map: global -> firstStoreConst, 第二次写就标为 NAC
+        Map<LLVMValueRef, FlowValue> seen = new HashMap<>();
+
+        for (LLVMValueRef func = LLVMGetFirstFunction(module); func != null; func = LLVMGetNextFunction(func)) {
+
+            for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
+
+                for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(
+                        inst)) {
+
+                    if (LLVMIsAStoreInst(inst) != null) {
+                        LLVMValueRef value = LLVMGetOperand(inst, 0);
+                        LLVMValueRef ptr = LLVMGetOperand(inst, 1);
+
+                        if (LLVMIsAGlobalVariable(ptr) != null) {
+                            FlowValue cur = seen.get(ptr);
+
+                            if (cur == null && LLVMIsAConstantInt(value) != null) {
+                                long constVal = LLVMConstIntGetSExtValue(value);
+                                seen.put(ptr, FlowValue.constant((int) constVal));
+                            } else {
+                                // 出现第二次写（或写非常量）→ NAC
+                                seen.put(ptr, FlowValue.nac());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 过滤掉 NAC，只留下真正"写一次常量"的全局
+        for (Map.Entry<LLVMValueRef, FlowValue> entry : seen.entrySet()) {
+            if (entry.getValue().isConstant()) {
+                singleStoreGlobals.put(entry.getKey(), entry.getValue());
+            }
+        }
+    }
+
     /**
      * 构造函数
      *
@@ -190,6 +309,8 @@ public class ConstantPropagationOptimizer {
         this.module = module;
         collectGlobalVariables();
         recordAllInstructions();
+        collectSingleStoreGlobals();
+        collectSingleStoreLocals();
     }
 
     /**
@@ -206,9 +327,9 @@ public class ConstantPropagationOptimizer {
     /**
      * 运行常量传播优化
      *
-     * @return 优化后的模块
+     * @return 是否进行了优化
      */
-    public LLVMModuleRef run() {
+    public boolean run() {
         boolean changed = false;
 
         // 对每个函数进行常量传播优化
@@ -219,7 +340,7 @@ public class ConstantPropagationOptimizer {
             }
         }
 
-        return module;
+        return changed;
     }
 
     /**
@@ -229,447 +350,201 @@ public class ConstantPropagationOptimizer {
      * @return 如果函数被修改，返回true
      */
     private boolean propagateConstants(LLVMValueRef func) {
-        // 构建控制流图
+        // 清除之前的状态
         memoryValues.clear();
+        instructionStates.clear();
+        preds.clear();
+        succs.clear();
 
-        Map<LLVMValueRef, List<LLVMValueRef>> successors = buildCFG(func);
-        Map<LLVMValueRef, List<LLVMValueRef>> predecessors = buildPredecessors(successors);
-
-        // 存储指令的数据流值
-        Map<LLVMValueRef, FlowValue> values = new HashMap<>();
-
-        // 初始化工作列表和指令的in和out值
-        Queue<LLVMValueRef> worklist = new LinkedList<>();
-        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
-            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst)) {
-                values.put(inst, FlowValue.undef());
-                worklist.add(inst);
-            }
-        }
+        // 构建控制流图和指令状态
+        buildCFG(func);
 
         // 处理全局变量初始值
         Map<String, Integer> globalInitValues = collectGlobalInitValues();
 
         // 执行工作列表算法
-        while (!worklist.isEmpty()) {
-            LLVMValueRef inst = worklist.poll();
-            String string = LLVMPrintValueToString(inst).getString();
-            String string_succ;
-            FlowValue oldValue = values.get(inst);
-
-            // 计算新的数据流值
-            FlowValue newValue = transfer(inst, values, globalInitValues);
-
-            // 如果值发生变化，更新并将后继加入工作列表
-            if (!newValue.equals(oldValue)) {
-                values.put(inst, newValue);
-
-                List<LLVMValueRef> succs = successors.getOrDefault(inst, Collections.emptyList());
-                if(!succs.isEmpty())
-                    string_succ = LLVMPrintValueToString(succs.get(0)).getString();
-
-                worklist.addAll(succs);
-            }
-        }
+        worklistSolve();
 
         // 根据分析结果优化代码
-        return applyOptimization(func, values);
+        return rewriteConstants();
     }
 
     /**
-     * 构建控制流图
-     *
-     * @param func 函数
-     * @return 指令的后继映射
+     * 构建控制流图并创建指令状态
      */
-    private Map<LLVMValueRef, List<LLVMValueRef>> buildCFG(LLVMValueRef func) {
-        Map<LLVMValueRef, List<LLVMValueRef>> successors = new HashMap<>();
-        Map<LLVMBasicBlockRef, LLVMValueRef> firstInstInBlock = new HashMap<>();
-        Map<LLVMBasicBlockRef, List<LLVMValueRef>> blockSuccessors = new HashMap<>();
+    private void buildCFG(LLVMValueRef func) {
+        Map<LLVMBasicBlockRef, InstructionState> firstInstInBlock = new HashMap<>();
 
-        // 记录每个基本块的第一条指令
+        // 清空指令状态
+        instructionStates.clear();
+        orderedInstructionStates.clear();
+
+        // 第一遍：为每个指令创建状态
         for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
-            LLVMValueRef firstInst = LLVMGetFirstInstruction(bb);
-            if (firstInst != null) {
-                String str_now = LLVMPrintValueToString(firstInst).getString();
-                firstInstInBlock.put(bb, firstInst);
-            }
 
-            // 初始化基本块后继列表
-            blockSuccessors.put(bb, new ArrayList<>());
-        }
-
-        // 构建基本块之间的后继关系
-        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
-            LLVMValueRef terminator = LLVMGetBasicBlockTerminator(bb);
-            if (terminator != null) {
-                int opcode = LLVMGetInstructionOpcode(terminator);
-
-                if (opcode == LLVMBr) {
-                    // 处理分支指令
-                    int numOperands = LLVMGetNumOperands(terminator);
-
-                    if (numOperands == 3) { // 条件分支
-                        LLVMBasicBlockRef trueBlock = LLVMValueAsBasicBlock(LLVMGetOperand(terminator, 2));
-                        LLVMBasicBlockRef falseBlock = LLVMValueAsBasicBlock(LLVMGetOperand(terminator, 1));
-
-                        if (firstInstInBlock.containsKey(trueBlock)) {
-                            blockSuccessors.get(bb).add(firstInstInBlock.get(trueBlock));
-                            // 将true分支添加到terminator的后继
-                            LLVMValueRef trueFirst = firstInstInBlock.get(trueBlock);
-                            String str_now = LLVMPrintValueToString(trueFirst).getString();
-                            successors.computeIfAbsent(terminator, k -> new ArrayList<>())
-                                    .add(trueFirst);
-                        }
-                        if (firstInstInBlock.containsKey(falseBlock)) {
-                            blockSuccessors.get(bb).add(firstInstInBlock.get(falseBlock));
-                            // 将false分支添加到terminator的后继
-                            LLVMValueRef falseFirst = firstInstInBlock.get(falseBlock);
-                            String str_now = LLVMPrintValueToString(falseFirst).getString();
-                            successors.computeIfAbsent(terminator, k -> new ArrayList<>())
-                                    .add(falseFirst);
-                        }
-                    } else if (numOperands == 1) { // 无条件分支
-                        LLVMBasicBlockRef destBlock = LLVMValueAsBasicBlock(LLVMGetOperand(terminator, 0));
-                        if (firstInstInBlock.containsKey(destBlock)) {
-                            blockSuccessors.get(bb).add(firstInstInBlock.get(destBlock));
-                            // 将目标添加到terminator的后继
-                            LLVMValueRef destFirst = firstInstInBlock.get(destBlock);
-                            String str_now = LLVMPrintValueToString(destFirst).getString();
-                            successors.computeIfAbsent(terminator, k -> new ArrayList<>())
-                                    .add(destFirst);
-                            successors.computeIfAbsent(terminator, k -> new ArrayList<>())
-                                    .add(destFirst);
-                        }
-                    }
-                } else if (opcode == LLVMRet) {
-                    // 返回指令没有后继，所以不需要添加
-//                    successors.computeIfAbsent(terminator, k -> new ArrayList<>());
-                }
-            }
-        }
-
-        // 构建指令级别的后继关系
-        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
-            LLVMValueRef prev = null;
+            LLVMValueRef firstInst = null;
 
             for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst)) {
-                String str_now = LLVMPrintValueToString(inst).getString();
-                String str_prev;
-                if (prev != null) {
-                    str_prev = LLVMPrintValueToString(prev).getString();
-                    successors.computeIfAbsent(prev, k -> new ArrayList<>()).add(inst);
-                }
-                prev = inst;
-            }
-
-            // 如果是基本块的最后一条指令，连接到后继基本块
-            if (prev != null) {
-                int opcode = LLVMGetInstructionOpcode(prev);
-                if (opcode == LLVMBr || opcode == LLVMRet) {
-                    // 已经在上面处理过终结指令
-                } else {
-                    // 非终结指令连接到后继基本块
-                    for (LLVMValueRef succ : blockSuccessors.get(bb)) {
-                        successors.computeIfAbsent(prev, k -> new ArrayList<>()).add(succ);
-                    }
-                }
-            }
-        }
-
-        return successors;
-    }
-
-    /**
-     * 构建前驱映射
-     *
-     * @param successors 后继映射
-     * @return 前驱映射
-     */
-    private Map<LLVMValueRef, List<LLVMValueRef>> buildPredecessors(Map<LLVMValueRef, List<LLVMValueRef>> successors) {
-        Map<LLVMValueRef, List<LLVMValueRef>> predecessors = new HashMap<>();
-
-        for (Map.Entry<LLVMValueRef, List<LLVMValueRef>> entry : successors.entrySet()) {
-            LLVMValueRef from = entry.getKey();
-            for (LLVMValueRef to : entry.getValue()) {
-                predecessors.computeIfAbsent(to, k -> new ArrayList<>()).add(from);
-            }
-        }
-
-        return predecessors;
-    }
-
-    /**
-     * 构建更精确的控制流图
-     * 基于数据依赖关系而非简单的指令顺序
-     */
-    private Map<LLVMValueRef, List<LLVMValueRef>> buildPreciseCFG(LLVMValueRef func)
-    {
-        // 指令到其前驱和后继的映射
-        Map<LLVMValueRef, List<LLVMValueRef>> predecessors = new HashMap<>();
-        Map<LLVMValueRef, List<LLVMValueRef>> successors = new HashMap<>();
-
-        // 变量名到最后定义该变量的指令的映射
-        Map<String, LLVMValueRef> lastDefMap = new HashMap<>();
-
-        // 每个基本块的终结指令
-        Map<LLVMBasicBlockRef, LLVMValueRef> blockTerminators = new HashMap<>();
-
-        // 每个基本块的第一条指令
-        Map<LLVMBasicBlockRef, LLVMValueRef> blockFirstInsts = new HashMap<>();
-
-        // 指令状态映射
-        Map<LLVMValueRef, InstructionState> instStates = new HashMap<>();
-
-        // 第一遍：分析每条指令的def和use，收集基本块信息
-        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb))
-        {
-            LLVMValueRef firstInst = null;
-            LLVMValueRef terminator = null;
-
-            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst))
-            {
-                if (firstInst == null)
-                {
-                    firstInst = inst;
-                }
 
                 // 创建指令状态
-                InstructionState state = new InstructionState();
-                instStates.put(inst, state);
+                InstructionState instState = new InstructionState(inst);
+                instructionStates.put(inst, instState);
 
-                // 分析指令类型
-                int opcode = LLVMGetInstructionOpcode(inst);
+                // 按原始顺序添加到有序列表
+                orderedInstructionStates.add(instState);
 
-                switch (opcode)
-                {
-                    case LLVMAlloca:
-                        // alloca定义了一个变量
-                        String allocaName = LLVMGetValueName(inst).getString();
-                        state.setDef(allocaName);
-                        lastDefMap.put(allocaName, inst);
-                        break;
-
-                    case LLVMLoad:
-                        // load使用了指针变量，定义了结果变量
-                        String loadResult = LLVMGetValueName(inst).getString();
-                        LLVMValueRef loadPtr = LLVMGetOperand(inst, 0);
-                        String loadPtrName = LLVMGetValueName(loadPtr).getString();
-
-                        state.addUse(loadPtrName);
-                        state.setDef(loadResult);
-                        lastDefMap.put(loadResult, inst);
-                        break;
-
-                    case LLVMStore:
-                        // store使用了值和指针变量
-                        LLVMValueRef storeValue = LLVMGetOperand(inst, 0);
-                        LLVMValueRef storePtr = LLVMGetOperand(inst, 1);
-
-                        // 如果值是变量（不是常量）
-                        if (LLVMIsAConstant(storeValue) == null)
-                        {
-                            String storeValueName = LLVMGetValueName(storeValue).getString();
-                            state.addUse(storeValueName);
-                        }
-
-                        String storePtrName = LLVMGetValueName(storePtr).getString();
-                        state.addUse(storePtrName);
-
-                        // store不定义变量，但会更新内存
-                        break;
-
-                    case LLVMAdd:
-                    case LLVMSub:
-                    case LLVMMul:
-                    case LLVMSDiv:
-                    case LLVMSRem:
-                        // 二元操作使用两个操作数，定义结果
-                        String binaryResult = LLVMGetValueName(inst).getString();
-                        LLVMValueRef lhs = LLVMGetOperand(inst, 0);
-                        LLVMValueRef rhs = LLVMGetOperand(inst, 1);
-
-                        // 如果操作数是变量（不是常量）
-                        if (LLVMIsAConstant(lhs) == null)
-                        {
-                            String lhsName = LLVMGetValueName(lhs).getString();
-                            state.addUse(lhsName);
-                        }
-
-                        if (LLVMIsAConstant(rhs) == null)
-                        {
-                            String rhsName = LLVMGetValueName(rhs).getString();
-                            state.addUse(rhsName);
-                        }
-
-                        state.setDef(binaryResult);
-                        lastDefMap.put(binaryResult, inst);
-                        break;
-
-                    case LLVMICmp:
-                        // 比较指令使用两个操作数，定义结果
-                        String cmpResult = LLVMGetValueName(inst).getString();
-                        LLVMValueRef cmpLhs = LLVMGetOperand(inst, 0);
-                        LLVMValueRef cmpRhs = LLVMGetOperand(inst, 1);
-
-                        if (LLVMIsAConstant(cmpLhs) == null)
-                        {
-                            String cmpLhsName = LLVMGetValueName(cmpLhs).getString();
-                            state.addUse(cmpLhsName);
-                        }
-
-                        if (LLVMIsAConstant(cmpRhs) == null)
-                        {
-                            String cmpRhsName = LLVMGetValueName(cmpRhs).getString();
-                            state.addUse(cmpRhsName);
-                        }
-
-                        state.setDef(cmpResult);
-                        lastDefMap.put(cmpResult, inst);
-                        break;
-
-                    case LLVMBr:
-                        // 分支指令可能使用条件变量
-                        int numOperands = LLVMGetNumOperands(inst);
-                        if (numOperands == 3)
-                        { // 条件分支
-                            LLVMValueRef condition = LLVMGetOperand(inst, 0);
-                            if (LLVMIsAConstant(condition) == null)
-                            {
-                                String condName = LLVMGetValueName(condition).getString();
-                                state.addUse(condName);
-                            }
-                        }
-                        terminator = inst;
-                        break;
-
-                    case LLVMRet:
-                        // 返回指令可能使用返回值
-                        if (LLVMGetNumOperands(inst) > 0)
-                        {
-                            LLVMValueRef retVal = LLVMGetOperand(inst, 0);
-                            if (LLVMIsAConstant(retVal) == null)
-                            {
-                                String retValName = LLVMGetValueName(retVal).getString();
-                                state.addUse(retValName);
-                            }
-                        }
-                        terminator = inst;
-                        break;
-
-                    case LLVMZExt:
-                    case LLVMSExt:
-                        // 扩展指令使用一个操作数，定义结果
-                        String extResult = LLVMGetValueName(inst).getString();
-                        LLVMValueRef extOp = LLVMGetOperand(inst, 0);
-
-                        if (LLVMIsAConstant(extOp) == null)
-                        {
-                            String extOpName = LLVMGetValueName(extOp).getString();
-                            state.addUse(extOpName);
-                        }
-
-                        state.setDef(extResult);
-                        lastDefMap.put(extResult, inst);
-                        break;
-
-                    default:
-                        // 处理其他类型的指令...
-                        break;
-                }
-            }
-
-            if (firstInst != null)
-            {
-                blockFirstInsts.put(bb, firstInst);
-            }
-
-            if (terminator != null)
-            {
-                blockTerminators.put(bb, terminator);
-            }
-        }
-
-        // 第二遍：建立指令间的前驱后继关系
-        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb))
-        {
-            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst))
-            {
-                InstructionState state = instStates.get(inst);
-
-                // 对于每个使用的变量，找到它的最后定义点，建立依赖关系
-                for (String useName : state.getUses())
-                {
-                    if (lastDefMap.containsKey(useName))
-                    {
-                        LLVMValueRef defInst = lastDefMap.get(useName);
-
-                        // 将定义指令添加为当前指令的前驱
-                        predecessors.computeIfAbsent(inst, k -> new ArrayList<>()).add(defInst);
-                        // 将当前指令添加为定义指令的后继
-                        successors.computeIfAbsent(defInst, k -> new ArrayList<>()).add(inst);
-                    }
-                }
-
-                // 如果这是基本块的终结指令，连接到目标块的第一条指令
-                if (blockTerminators.containsValue(inst))
-                {
-                    int opcode = LLVMGetInstructionOpcode(inst);
-
-                    if (opcode == LLVMBr)
-                    {
-                        int numOperands = LLVMGetNumOperands(inst);
-
-                        if (numOperands == 3)
-                        { // 条件分支
-                            LLVMBasicBlockRef trueBlock = LLVMValueAsBasicBlock(LLVMGetOperand(inst, 2));
-                            LLVMBasicBlockRef falseBlock = LLVMValueAsBasicBlock(LLVMGetOperand(inst, 1));
-
-                            if (blockFirstInsts.containsKey(trueBlock))
-                            {
-                                LLVMValueRef trueFirst = blockFirstInsts.get(trueBlock);
-                                successors.computeIfAbsent(inst, k -> new ArrayList<>()).add(trueFirst);
-                                predecessors.computeIfAbsent(trueFirst, k -> new ArrayList<>()).add(inst);
-                            }
-
-                            if (blockFirstInsts.containsKey(falseBlock))
-                            {
-                                LLVMValueRef falseFirst = blockFirstInsts.get(falseBlock);
-                                successors.computeIfAbsent(inst, k -> new ArrayList<>()).add(falseFirst);
-                                predecessors.computeIfAbsent(falseFirst, k -> new ArrayList<>()).add(inst);
-                            }
-                        }
-                        else if (numOperands == 1)
-                        { // 无条件分支
-                            LLVMBasicBlockRef destBlock = LLVMValueAsBasicBlock(LLVMGetOperand(inst, 0));
-
-                            if (blockFirstInsts.containsKey(destBlock))
-                            {
-                                LLVMValueRef destFirst = blockFirstInsts.get(destBlock);
-                                successors.computeIfAbsent(inst, k -> new ArrayList<>()).add(destFirst);
-                                predecessors.computeIfAbsent(destFirst, k -> new ArrayList<>()).add(inst);
-                            }
-                        }
-                    }
-                    // 返回指令没有后继
-                }
-                // 所有非终结指令都要连接到块内的下一条指令
-                else if (LLVMGetNextInstruction(inst) != null)
-                {
-                    LLVMValueRef nextInst = LLVMGetNextInstruction(inst);
-                    successors.computeIfAbsent(inst, k -> new ArrayList<>()).add(nextInst);
-                    predecessors.computeIfAbsent(nextInst, k -> new ArrayList<>()).add(inst);
+                if (firstInst == null) {
+                    firstInst = inst;
+                    firstInstInBlock.put(bb, instState);
                 }
             }
         }
 
-        return successors;
+        // 第二遍：构建控制流图
+        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
+
+            InstructionState prevState = null;
+
+            // 建立基本块内指令之间的顺序关系
+            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst)) {
+
+                InstructionState currentState = instructionStates.get(inst);
+
+                if (prevState != null) {
+                    addEdge(prevState, currentState);
+                }
+
+                prevState = currentState;
+            }
+
+            // 处理终结指令
+            LLVMValueRef terminator = LLVMGetBasicBlockTerminator(bb);
+            if (terminator != null) {
+                InstructionState terminatorState = instructionStates.get(terminator);
+
+                // 处理分支指令
+                if (LLVMGetInstructionOpcode(terminator) == LLVMBr) {
+                    int numSuccessors = LLVMGetNumSuccessors(terminator);
+
+                    for (int i = 0; i < numSuccessors; i++) {
+                        LLVMBasicBlockRef succBB = LLVMGetSuccessor(terminator, i);
+                        InstructionState succFirstState = firstInstInBlock.get(succBB);
+
+                        if (succFirstState != null) {
+                            addEdge(terminatorState, succFirstState);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 添加控制流边
+     */
+    private void addEdge(InstructionState from, InstructionState to) {
+        succs.computeIfAbsent(from, k -> new ArrayList<>()).add(to);
+        preds.computeIfAbsent(to, k -> new ArrayList<>()).add(from);
+    }
+
+    /**
+     * 工作列表算法求解数据流方程
+     */
+    private void worklistSolve() {
+        // 使用有序的指令列表初始化工作列表，保持原始执行顺序
+        Set<InstructionState> worklistSet = new LinkedHashSet<>(orderedInstructionStates);
+
+        while (!worklistSet.isEmpty()) {
+            // 获取并移除第一个元素
+            Iterator<InstructionState> it = worklistSet.iterator();
+            InstructionState state = it.next();
+            it.remove();
+
+            // 合并前驱的out值
+            Map<String, FlowValue> mergedInValues = new HashMap<>();
+            List<InstructionState> predecessors = preds.getOrDefault(state, Collections.emptyList());
+
+            // 如果没有前驱，初始化一个空的in值映射
+            // 但不要跳过处理，因为我们仍需要执行转移函数
+            if (predecessors.isEmpty()) {
+                // 保持空的mergedInValues，但继续处理
+            } else {
+                // 合并所有前驱的out值
+                for (InstructionState pred : predecessors) {
+                    Map<String, FlowValue> predOut = pred.getAllOutValues();
+
+                    for (Map.Entry<String, FlowValue> entry : predOut.entrySet()) {
+                        String var = entry.getKey();
+                        FlowValue predValue = entry.getValue();
+
+                        if (mergedInValues.containsKey(var)) {
+                            FlowValue currentValue = mergedInValues.get(var);
+                            mergedInValues.put(var, FlowValue.meet(currentValue, predValue));
+                        } else {
+                            mergedInValues.put(var, predValue);
+                        }
+                    }
+                }
+            }
+
+            // 更新当前指令的in值
+            boolean inChanged = false;
+            Map<String, FlowValue> oldInValues = new HashMap<>(state.getAllInValues());
+
+            for (Map.Entry<String, FlowValue> entry : mergedInValues.entrySet()) {
+                String var = entry.getKey();
+                FlowValue newVal = entry.getValue();
+                FlowValue oldVal = state.getInValue(var);
+
+                if (!oldVal.equals(newVal)) {
+                    state.setInValue(var, newVal);
+                    inChanged = true;
+                }
+            }
+
+            // 移除这个条件，确保第一条指令能被正确处理
+            // 即使没有前驱，也需要执行转移函数
+            /*
+             * if (!inChanged && mergedInValues.size() == oldInValues.size()) {
+             * // 如果in值没有变化，继续处理下一个指令
+             * continue;
+             * }
+             */
+
+            // 转移函数
+            Map<String, FlowValue> oldOutValues = new HashMap<>(state.getAllOutValues());
+            Map<String, FlowValue> newOutValues = transfer(state.getInstruction(), mergedInValues);
+
+            // 检查out值是否发生变化
+            boolean changed = false;
+            if (oldOutValues.size() != newOutValues.size()) {
+                changed = true;
+            } else {
+                for (Map.Entry<String, FlowValue> entry : newOutValues.entrySet()) {
+                    String var = entry.getKey();
+                    FlowValue newVal = entry.getValue();
+                    FlowValue oldVal = oldOutValues.getOrDefault(var, FlowValue.undef());
+
+                    if (!oldVal.equals(newVal)) {
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+
+            // 如果输出值发生变化，更新状态并将后继加入工作列表
+            if (changed) {
+                state.setAllOutValues(newOutValues);
+
+                for (InstructionState succ : succs.getOrDefault(state, Collections.emptyList())) {
+                    worklistSet.add(succ);
+                }
+            }
+        }
     }
 
     /**
      * 收集全局变量的初始值
-     *
-     * @return 全局变量名到初始值的映射
      */
     private Map<String, Integer> collectGlobalInitValues() {
         Map<String, Integer> result = new HashMap<>();
@@ -689,304 +564,249 @@ public class ConstantPropagationOptimizer {
 
     /**
      * 传递函数 - 计算指令的数据流值
-     *
-     * @param inst             当前指令
-     * @param values           已知的指令值映射
-     * @param globalInitValues 全局变量初始值
-     * @return 指令的新数据流值
      */
-    private FlowValue transfer(LLVMValueRef inst, Map<LLVMValueRef, FlowValue> values,
-            Map<String, Integer> globalInitValues) {
+    private Map<String, FlowValue> transfer(LLVMValueRef inst, Map<String, FlowValue> inValues) {
         int opcode = LLVMGetInstructionOpcode(inst);
+        Map<String, FlowValue> result = new HashMap<>(inValues); // 复制输入状态作为基础
+        String instName = instructionValueToString.getOrDefault(inst, LLVMPrintValueToString(inst).getString());
 
         switch (opcode) {
+            /* ---------- 二元整数运算 ---------- */
             case LLVMAdd:
             case LLVMSub:
             case LLVMMul:
             case LLVMSDiv:
-            case LLVMSRem:
-                return evaluateBinaryOp(inst, opcode, values);
-
-            case LLVMLoad:
-                return evaluateLoad(inst, values, globalInitValues);
-
-            case LLVMAlloca:
-                // 分配指令本身不产生值
-                return FlowValue.undef();
-
-            case LLVMStore:
-                // 存储指令不生成值
-                //todo 这里应该接入伪代码里v = n case
-                return evaluateStore(inst,values,globalInitValues);
-
-            case LLVMICmp:
-                return evaluateICmp(inst, values);
-
-            case LLVMZExt:
-            case LLVMSExt:
-                return evaluateExtension(inst, values);
-
-            default:
-                // 对于其他指令，默认为NAC
-                return FlowValue.nac();
-        }
-    }
-
-    /**
-     * 评估二元操作
-     */
-    private FlowValue evaluateBinaryOp(LLVMValueRef inst, int opcode, Map<LLVMValueRef, FlowValue> values) {
-        LLVMValueRef lhs = LLVMGetOperand(inst, 0);
-        LLVMValueRef rhs = LLVMGetOperand(inst, 1);
-
-        FlowValue lhsValue = getValueOf(lhs, values);
-        FlowValue rhsValue = getValueOf(rhs, values);
-
-        // 如果任一操作数为NAC，结果为NAC
-        if (lhsValue.isNac() || rhsValue.isNac()) {
-            return FlowValue.nac();
-        }
-
-        // 如果任一操作数为UNDEF，结果为UNDEF
-        if (lhsValue.isUndef() || rhsValue.isUndef()) {
-            return FlowValue.undef();
-        }
-
-        // 如果两个操作数都是常量，计算结果
-        if (lhsValue.isConstant() && rhsValue.isConstant()) {
-            int lhsConst = lhsValue.getConstValue();
-            int rhsConst = rhsValue.getConstValue();
-
-            switch (opcode) {
-                case LLVMAdd:
-                    return FlowValue.constant(lhsConst + rhsConst);
-                case LLVMSub:
-                    return FlowValue.constant(lhsConst - rhsConst);
-                case LLVMMul:
-                    return FlowValue.constant(lhsConst * rhsConst);
-                case LLVMSDiv:
-                    if (rhsConst == 0)
-                        return FlowValue.nac(); // 除零错误
-                    return FlowValue.constant(lhsConst / rhsConst);
-                case LLVMSRem:
-                    if (rhsConst == 0)
-                        return FlowValue.nac(); // 除零错误
-                    return FlowValue.constant(lhsConst % rhsConst);
-                default:
-                    return FlowValue.nac();
+            case LLVMSRem: {
+                LLVMValueRef op1 = LLVMGetOperand(inst, 0);
+                LLVMValueRef op2 = LLVMGetOperand(inst, 1);
+                FlowValue a = valueOf(op1, inValues);
+                FlowValue b = valueOf(op2, inValues);
+                FlowValue res = evaluateBinaryOp(opcode, a, b);
+                result.put(instName, res);
+                return result;
             }
-        }
 
-        return FlowValue.nac();
-    }
-
-    /**
-     * 评估Load指令
-     */
-    private FlowValue evaluateLoad(LLVMValueRef inst, Map<LLVMValueRef, FlowValue> values,
-            Map<String, Integer> globalInitValues) {
-        LLVMValueRef ptr = LLVMGetOperand(inst, 0);
-        String ptrName = LLVMGetValueName(ptr).getString();
-
-        // 检查是否是全局变量
-        boolean isGlobal = LLVMIsAGlobalVariable(ptr) != null;
-
-        // 为全局变量添加@前缀，保持与store操作一致
-        if (isGlobal)
-            ptrName = "@" + ptrName;
-
-        // 首先从memoryValues中查找内存位置的当前状态
-        if (memoryValues.containsKey(ptrName))
-        {
-            return memoryValues.get(ptrName);
-        }
-
-        // 如果是全局变量且尚未在memoryValues中记录（可能尚未被store指令修改）
-        if (isGlobal && globalInitValues.containsKey(ptrName))
-        {
-            // 使用初始值
-            FlowValue initialValue = FlowValue.constant(globalInitValues.get(ptrName));
-            // 存入memoryValues以便后续使用
-            memoryValues.put(ptrName, initialValue);
-            return initialValue;
-        }
-
-        // 移除旧的查找store指令的代码，现在我们完全通过memoryValues来追踪内存状态
-
-        // 找不到对应的内存状态，返回NAC
-        return FlowValue.nac();
-    }
-
-    private FlowValue evaluateStore(LLVMValueRef inst, Map<LLVMValueRef, FlowValue> values,
-                                    Map<String, Integer> globalInitValues)
-    {
-        // 获取存储的值和目标地址
-        LLVMValueRef valueToStore = LLVMGetOperand(inst, 0);
-        LLVMValueRef ptr = LLVMGetOperand(inst, 1);
-        String ptrName = LLVMGetValueName(ptr).getString();
-
-        boolean isGlobal = LLVMIsAGlobalVariable(ptr) != null;
-
-        if(isGlobal)
-            ptrName = "@" + ptrName;
-
-        // 获取存储值的状态
-        FlowValue storedValue = getValueOf(valueToStore, values);
-
-        FlowValue oldValue;
-
-        // 对于全局变量，如果内存中没有记录，则获取初始值
-        if (isGlobal && !memoryValues.containsKey(ptrName))
-        {
-
-            if (globalInitValues.containsKey(ptrName))
-            {
-                oldValue = FlowValue.constant(globalInitValues.get(ptrName));
+            /* ---------- 关系运算 ---------- */
+            case LLVMICmp: {
+                int pred = LLVMGetICmpPredicate(inst);
+                LLVMValueRef op1 = LLVMGetOperand(inst, 0);
+                LLVMValueRef op2 = LLVMGetOperand(inst, 1);
+                FlowValue a = valueOf(op1, inValues);
+                FlowValue b = valueOf(op2, inValues);
+                FlowValue res = evaluateICmp(pred, a, b);
+                result.put(instName, res);
+                return result;
             }
-            else
-            {
-                oldValue = FlowValue.undef();
-            }
-        }
-        else
-        {
-            // 获取当前内存位置的状态
-            oldValue = memoryValues.getOrDefault(ptrName, FlowValue.undef());
-        }
 
-        FlowValue newValue = oldValue; // 默认不变
+            /* ---------- load ---------- */
+            case LLVMLoad: {
+                LLVMValueRef ptr = LLVMGetOperand(inst, 0);
+                FlowValue res;
 
-        // 根据规则更新内存位置的状态
-        if (oldValue.isUndef())
-        {
-            // undef遇到任何值，采用新值
-            newValue = storedValue;
-        }
-        else if (oldValue.isConstant())
-        {
-            // const遇到不同const或nac，变为nac
-            if (storedValue.isConstant())
-            {
-                if (!oldValue.getConstValue().equals(storedValue.getConstValue()))
-                {
-                    newValue = FlowValue.nac();
+                // 首先检查是否是单次存储的局部变量
+                FlowValue v = singleStoreLocals.get(ptr);
+                if (v != null) {
+                    res = v;
+                } else {
+                    // 然后检查是否是单次存储的全局变量
+                    v = singleStoreGlobals.get(ptr);
+                    if (v != null) {
+                        res = v;
+                    } else {
+                        // 最后使用原有的load评估逻辑
+                        res = evaluateLoad(inst, inValues);
+                    }
                 }
-                // 相同常量值保持不变
-            }
-            else if (storedValue.isNac())
-            {
-                newValue = FlowValue.nac();
-            }
-            // storedValue是undef，保持原值不变
-        }
-        // 当前值是nac，保持不变
 
-        // 更新内存位置的状态
-        memoryValues.put(ptrName, newValue);
-
-        // 返回更新后的内存位置状态
-        return newValue;
-    }
-
-    /**
-     * 评估比较指令
-     */
-    private FlowValue evaluateICmp(LLVMValueRef inst, Map<LLVMValueRef, FlowValue> values) {
-        int predicate = LLVMGetICmpPredicate(inst);
-        LLVMValueRef lhs = LLVMGetOperand(inst, 0);
-        LLVMValueRef rhs = LLVMGetOperand(inst, 1);
-
-        FlowValue lhsValue = getValueOf(lhs, values);
-        FlowValue rhsValue = getValueOf(rhs, values);
-
-        if (lhsValue.isNac() || rhsValue.isNac()) {
-            return FlowValue.nac();
-        }
-
-        if (lhsValue.isUndef() || rhsValue.isUndef()) {
-            return FlowValue.undef();
-        }
-
-        if (lhsValue.isConstant() && rhsValue.isConstant()) {
-            int lhsConst = lhsValue.getConstValue();
-            int rhsConst = rhsValue.getConstValue();
-            boolean result;
-
-            switch (predicate) {
-                case LLVMIntEQ:
-                    result = lhsConst == rhsConst;
-                    break;
-                case LLVMIntNE:
-                    result = lhsConst != rhsConst;
-                    break;
-                case LLVMIntSGT:
-                    result = lhsConst > rhsConst;
-                    break;
-                case LLVMIntSGE:
-                    result = lhsConst >= rhsConst;
-                    break;
-                case LLVMIntSLT:
-                    result = lhsConst < rhsConst;
-                    break;
-                case LLVMIntSLE:
-                    result = lhsConst <= rhsConst;
-                    break;
-                default:
-                    return FlowValue.nac();
+                result.put(instName, res);
+                return result;
             }
 
-            return FlowValue.constant(result ? 1 : 0);
+            /* ---------- store ---------- */
+            case LLVMStore: {
+                LLVMValueRef val = LLVMGetOperand(inst, 0);
+                LLVMValueRef ptr = LLVMGetOperand(inst, 1);
+                String ptrName = LLVMPrintValueToString(ptr).getString();
+
+                FlowValue valValue = valueOf(val, inValues);
+                if (valValue.isConstant() || valValue.isNac()) {
+                    // 更新内存状态
+                    result.put(ptrName, valValue);
+                }
+
+                return result;
+            }
+
+            /* ---------- 扩展指令 ---------- */
+            case LLVMZExt:
+            case LLVMSExt: {
+                LLVMValueRef operand = LLVMGetOperand(inst, 0);
+                FlowValue opVal = valueOf(operand, inValues);
+                result.put(instName, opVal);
+                return result;
+            }
+
+            /* ---------- 其他指令 ---------- */
+            default:
+                result.put(instName, FlowValue.nac());
+                return result;
         }
-
-        return FlowValue.nac();
-    }
-
-    /**
-     * 评估扩展指令
-     */
-    private FlowValue evaluateExtension(LLVMValueRef inst, Map<LLVMValueRef, FlowValue> values) {
-        LLVMValueRef operand = LLVMGetOperand(inst, 0);
-        return getValueOf(operand, values);
     }
 
     /**
      * 获取操作数的值
      */
-    private FlowValue getValueOf(LLVMValueRef operand, Map<LLVMValueRef, FlowValue> values) {
-        if (LLVMIsAConstantInt(operand) != null) {
-            long constValue = LLVMConstIntGetSExtValue(operand);
-            return FlowValue.constant((int) constValue);
+    private FlowValue valueOf(LLVMValueRef v, Map<String, FlowValue> inValues) {
+        if (LLVMIsAConstantInt(v) != null) {
+            long constVal = LLVMConstIntGetSExtValue(v);
+            return FlowValue.constant((int) constVal);
         }
 
-        return values.getOrDefault(operand, FlowValue.undef());
+        String vName = LLVMPrintValueToString(v).getString();
+        if (inValues.containsKey(vName)) {
+            return inValues.get(vName);
+        }
+
+        InstructionState state = instructionStates.get(v);
+        if (state != null) {
+            return state.getOutValue(vName); // 使用指令的输出值
+        }
+
+        return FlowValue.nac(); // 无法确定
+    }
+
+    /**
+     * 评估二元操作
+     */
+    private FlowValue evaluateBinaryOp(int opcode, FlowValue a, FlowValue b) {
+        if (a.isConstant() && b.isConstant()) {
+            int av = a.getConstValue();
+            int bv = b.getConstValue();
+            int res;
+
+            switch (opcode) {
+                case LLVMAdd:
+                    res = av + bv;
+                    break;
+                case LLVMSub:
+                    res = av - bv;
+                    break;
+                case LLVMMul:
+                    res = av * bv;
+                    break;
+                case LLVMSDiv:
+                    if (bv == 0)
+                        return FlowValue.nac(); // 除零错误
+                    res = av / bv;
+                    break;
+                case LLVMSRem:
+                    if (bv == 0)
+                        return FlowValue.nac(); // 除零错误
+                    res = av % bv;
+                    break;
+                default:
+                    return FlowValue.nac(); // 不支持的操作码
+            }
+            return FlowValue.constant(res);
+        }
+
+        if (a.isNac() || b.isNac())
+            return FlowValue.nac();
+        return FlowValue.undef();
+    }
+
+    /**
+     * 评估比较指令
+     */
+    private FlowValue evaluateICmp(int pred, FlowValue a, FlowValue b) {
+        if (a.isConstant() && b.isConstant()) {
+            boolean r;
+            int av = a.getConstValue();
+            int bv = b.getConstValue();
+
+            switch (pred) {
+                case LLVMIntEQ:
+                    r = av == bv;
+                    break;
+                case LLVMIntNE:
+                    r = av != bv;
+                    break;
+                case LLVMIntSLT:
+                    r = av < bv;
+                    break;
+                case LLVMIntSLE:
+                    r = av <= bv;
+                    break;
+                case LLVMIntSGT:
+                    r = av > bv;
+                    break;
+                case LLVMIntSGE:
+                    r = av >= bv;
+                    break;
+                default:
+                    return FlowValue.nac(); // 其他谓词暂不处理
+            }
+            return FlowValue.constant(r ? 1 : 0);
+        }
+
+        if (a.isNac() || b.isNac())
+            return FlowValue.nac();
+        return FlowValue.undef();
+    }
+
+    /**
+     * 评估Load指令
+     */
+    private FlowValue evaluateLoad(LLVMValueRef inst, Map<String, FlowValue> inValues) {
+        LLVMValueRef ptr = LLVMGetOperand(inst, 0);
+        String ptrName = LLVMPrintValueToString(ptr).getString();
+        boolean isGlobal = LLVMIsAGlobalVariable(ptr) != null;
+
+        if (isGlobal) {
+            ptrName = "@" + LLVMGetValueName(ptr).getString();
+        }
+
+        // 首先检查是否在当前in映射中
+        if (inValues.containsKey(ptrName)) {
+            return inValues.get(ptrName);
+        }
+
+        // 从memoryValues中查找
+        if (memoryValues.containsKey(ptrName)) {
+            return memoryValues.get(ptrName);
+        }
+
+        // 对于全局变量，我们可以使用初始值
+        Map<String, Integer> globalInitValues = collectGlobalInitValues();
+        if (isGlobal && globalInitValues.containsKey(ptrName)) {
+            FlowValue initialValue = FlowValue.constant(globalInitValues.get(ptrName));
+            memoryValues.put(ptrName, initialValue);
+            return initialValue;
+        }
+
+        return FlowValue.nac();
     }
 
     /**
      * 应用优化 - 替换常量并删除冗余指令
-     *
-     * @param func   要优化的函数
-     * @param values 常量传播分析结果
-     * @return 是否进行了优化
      */
-    private boolean applyOptimization(LLVMValueRef func, Map<LLVMValueRef, FlowValue> values) {
+    private boolean rewriteConstants() {
         boolean changed = false;
         List<LLVMValueRef> toRemove = new ArrayList<>();
 
-        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
-            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst)) {
-                FlowValue value = values.get(inst);
+        for (Map.Entry<LLVMValueRef, InstructionState> entry : instructionStates.entrySet()) {
+            LLVMValueRef inst = entry.getKey();
+            InstructionState state = entry.getValue();
+            String instString = state.getInstructionString();
 
-                if (value != null && value.isConstant()) {
-                    // 创建常量
-                    LLVMValueRef constValue = LLVMConstInt(LLVMTypeOf(inst), value.getConstValue(), 0);
+            // 查找该指令自身的输出值
+            FlowValue outVal = state.getOutValue(instString);
 
-                    // 替换所有使用点
-                    LLVMReplaceAllUsesWith(inst, constValue);
-
-                    // 标记要删除的指令
-                    toRemove.add(inst);
-                    changed = true;
-                }
+            if (outVal != null && outVal.isConstant()) {
+                LLVMValueRef c = LLVMConstInt(LLVMTypeOf(inst), outVal.getConstValue(), 0);
+                LLVMReplaceAllUsesWith(inst, c);
+                toRemove.add(inst);
+                changed = true;
             }
         }
 

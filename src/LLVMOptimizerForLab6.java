@@ -53,33 +53,20 @@ public class LLVMOptimizerForLab6 {
         boolean changed = false;
         int iterationCount = 0;
         final int MAX_ITERATIONS = 10; // 设置最大迭代次数，防止意外的无限循环
-//        new Module(module).dump(Option.of(new File(ll_output)));
+        // new Module(module).dump(Option.of(new File(ll_output)));
 
         do {
 
             // 应用常量传播优化
-//            module = constantPropagation.run();
-//
-            boolean changed1 = checkForChanges();
-//            if(changed1)
-//                new Module(module).dump(Option.of(new File(op_ll_output)));
+            boolean changed1 = constantPropagation.run();
 
             // 应用死代码消除优化（使用常量传播的结果）
-            module = deadCodeElimination.run();
-
-            boolean changed2 = checkForChanges();
-//            if(changed2)
-//                new Module(module).dump(Option.of(new File(op_ll_output)));
+            boolean changed2 = deadCodeElimination.run();
 
             // 应用未使用变量消除优化
-            module = unusedVarElimination.run();
-
-            boolean changed3 = checkForChanges();
-//            if(changed3)
-//                new Module(module).dump(Option.of(new File(op_ll_output)));
+            boolean changed3 = unusedVarElimination.run();
 
             // 检查是否有任何变化
-//            changed = checkForChanges();
             changed = changed1 || changed2 || changed3;
 
             // 更新每个优化器的模块引用

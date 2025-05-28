@@ -36,9 +36,9 @@ public class DeadCodeEliminationOptimizer {
     /**
      * 运行死代码消除优化
      *
-     * @return 优化后的模块
+     * @return 是否进行了优化
      */
-    public LLVMModuleRef run() {
+    public boolean run() {
         boolean changed = false;
 
         // 先尝试消除分支不可达代码
@@ -57,7 +57,7 @@ public class DeadCodeEliminationOptimizer {
             }
         }
 
-        return module;
+        return changed;
     }
 
     /**

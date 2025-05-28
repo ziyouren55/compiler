@@ -36,9 +36,9 @@ public class UnusedVarEliminationOptimizer {
     /**
      * 运行未使用变量消除优化
      *
-     * @return 优化后的模块
+     * @return 是否进行了优化
      */
-    public LLVMModuleRef run() {
+    public boolean run() {
         boolean changed = false;
 
         // 对每个函数进行未使用变量消除
@@ -50,7 +50,7 @@ public class UnusedVarEliminationOptimizer {
             }
         }
 
-        return module;
+        return changed;
     }
 
     /**

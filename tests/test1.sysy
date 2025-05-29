@@ -1,14 +1,41 @@
-int global_c = 0;
 int main() {
-    global_c = 15;
-    int i = 0;
-    while (i < 5) {
-        global_c = global_c + i;
-        i = i + 1;
+    const int FLAG_A = 0;         // 死代码相关常量
+    const int FLAG_B = 5;         // 常量传播候选1
+    const int FLAG_C = 10;        // 常量传播候选2
+    const int LOOP_COUNT = 3;     // 循环次数常量
+
+    int result = FLAG_B;          // 初始值来自常量
+    int counter = 0;
+    int temp = 0;
+
+    // 包含死代码的分支结构
+    if (FLAG_A) {                 // 永远为假的死代码
+        temp = FLAG_C * 2;        // 此代码块应被消除
+        result = result + temp;
+    } else if (FLAG_B > LOOP_COUNT) {  // 常量传播候选
+        result = result + FLAG_B;         // 应替换为 result += 5
+        temp = FLAG_C / 2;        // 应被传播
     }
-    if (global_c > 20) {
-        return 1;
-    } else {
-        return 0;
+
+    // 包含死代码的循环结构
+    while (counter < LOOP_COUNT) { // 常量传播确定循环3次
+        if (FLAG_C) {             // 永远为真的有效代码
+            temp = temp + FLAG_C;       // 应替换为 temp += 10
+        } else {
+            temp = counter;       // 此分支不可达（死代码）
+        }
+
+        // 死代码：永远不执行的代码块
+        if (0) {                  // 显式死代码
+            result = result + 2;          // 此代码应被消除
+        }
+
+        counter = counter + 1;
     }
+
+    // 死代码：未使用变量和无效计算
+    int unused_var = FLAG_A + FLAG_C; // 未被使用的变量
+
+    // 最终计算应包含常量传播结果
+    return result + temp + LOOP_COUNT;
 }

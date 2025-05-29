@@ -156,13 +156,13 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
     public Value visitVarDef(SysYParser.VarDefContext ctx)
     {
         String varName = ctx.IDENT().getText();
-          // 处理初始化表达式
-        Value initVal = (ctx.ASSIGN() != null)
-        ? visitInitVal(ctx.initVal())
-        : i32.getConstant(0, false);
 
          // 2. 如果 currentFunction==null，就当做全局变量处理
         if (currentFunction == null) {
+
+            Value initVal = (ctx.ASSIGN() != null)
+            ? i32.getConstant(computeConstAddExp(ctx.initVal().exp().addExp()),false)
+            : i32.getConstant(0, false);
             // a) 在模块里添加全局变量
             GlobalVariable gVar = mod
               .addGlobalVariable(varName, context.getInt32Type(), Option.empty())
@@ -173,6 +173,10 @@ public class LLVMIRVisitor extends SysYParserBaseVisitor<Value>
             globalScope.put(varName, gVar);
             return gVar;
         }
+
+        Value initVal = (ctx.ASSIGN() != null)
+        ? visitInitVal(ctx.initVal())
+        : i32.getConstant(0, false);
 
         // 局部变量需要调用 builder.buildAlloca 分配内存
         Value localVar = builder.buildAlloca(i32, Option.of(varName));

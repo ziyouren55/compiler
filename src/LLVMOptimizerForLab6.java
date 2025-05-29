@@ -63,14 +63,14 @@ public class LLVMOptimizerForLab6 {
             // 应用常量传播优化
             boolean changed1 = constantPropagation.run();
 
-            // 应用死代码消除优化（使用常量传播的结果）
+//            // 应用死代码消除优化（使用常量传播的结果）
 //            boolean changed2 = deadCodeElimination.run();
 
             // 应用未使用变量消除优化
-//            boolean changed3 = unusedVarElimination.run();
+            boolean changed3 = unusedVarElimination.run();
 
             // 检查是否有任何变化
-            changed = changed1;
+            changed = changed1 || changed3;
 
             // 更新每个优化器的模块引用
             if (changed) {

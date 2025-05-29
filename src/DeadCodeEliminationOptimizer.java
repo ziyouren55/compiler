@@ -19,7 +19,7 @@ public class DeadCodeEliminationOptimizer {
 
     private LLVMModuleRef module;
     private ConstantPropagationOptimizer constPropOptimizer;
-    String op_ll_output = "./tests/ll_out/op_output.ll";
+//    String op_ll_output = "./tests/ll_out/op_output.ll";
 
     // 全局CFG字段
     private Map<BlockState, Set<BlockState>> successors = new HashMap<>();
@@ -97,7 +97,7 @@ public class DeadCodeEliminationOptimizer {
             // 跳过外部函数声明
             if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0) {
                 changed |= eliminateDeadStores(func);
-                new Module(module).dump(Option.of(new File(op_ll_output)));
+//                new Module(module).dump(Option.of(new File(op_ll_output)));
             }
         }
 
@@ -108,7 +108,7 @@ public class DeadCodeEliminationOptimizer {
             // 跳过外部函数声明
             if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0) {
                 changed |= eliminateUnreachableCode(func);
-                new Module(module).dump(Option.of(new File(op_ll_output)));
+//                new Module(module).dump(Option.of(new File(op_ll_output)));
             }
         }
 
@@ -117,7 +117,7 @@ public class DeadCodeEliminationOptimizer {
             // 跳过外部函数声明
             if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0) {
                 changed |= eliminateRedundantJumps(func);
-                new Module(module).dump(Option.of(new File(op_ll_output)));
+//                new Module(module).dump(Option.of(new File(op_ll_output)));
             }
         }
 
@@ -203,7 +203,7 @@ public class DeadCodeEliminationOptimizer {
         // 检测条件分支的条件是否为常量
         changed |= simplifyConstantBranches(func);
 
-        new Module(module).dump(Option.of(new File(op_ll_output)));
+//        new Module(module).dump(Option.of(new File(op_ll_output)));
 
         // 查找没有前驱的基本块（除了入口块）
         Set<BlockState> unreachableBlocks = findUnreachableBlocks(func, predecessors, successors);
@@ -226,7 +226,7 @@ public class DeadCodeEliminationOptimizer {
             LLVMRemoveBasicBlockFromParent(blockState.getBlock());
             changed = true;
         }
-        new Module(module).dump(Option.of(new File(op_ll_output)));
+//        new Module(module).dump(Option.of(new File(op_ll_output)));
 
         return changed;
     }

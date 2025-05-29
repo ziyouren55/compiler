@@ -1,8 +1,14 @@
-int global_var = 1;
-
+int global_c = 0;
 int main() {
-    int num = 1;
-    int c = num;
-
-    return num * num + c;
+    global_c = 15;
+    int i = 0;
+    while (i < 5) {
+        global_c = global_c + i;
+        i = i + 1;
+    }
+    if (global_c > 20) {
+        return 1;
+    } else {
+        return 0;
+    }
 }

@@ -5,9 +5,10 @@ import static org.bytedeco.llvm.global.LLVM.*;
 
 /**
  * 死代码消除优化器类
- * 实现两种死代码消除:
+ * 实现三种死代码消除:
  * 1. 分支不可达代码消除：删除永远不会执行的代码块
  * 2. 冗余跳转消除：消除多余的跳转指令并合并基本块
+ * 3. 死存储消除：消除被覆盖而未被读取的store指令
  */
 public class DeadCodeEliminationOptimizer {
 
@@ -41,7 +42,15 @@ public class DeadCodeEliminationOptimizer {
     public boolean run() {
         boolean changed = false;
 
-        // 先尝试消除分支不可达代码
+        // 首先尝试消除死存储
+        for (LLVMValueRef func = LLVMGetFirstFunction(module); func != null; func = LLVMGetNextFunction(func)) {
+            // 跳过外部函数声明
+            if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0) {
+                changed |= eliminateDeadStores(func);
+            }
+        }
+
+        // 然后尝试消除分支不可达代码
         for (LLVMValueRef func = LLVMGetFirstFunction(module); func != null; func = LLVMGetNextFunction(func)) {
             // 跳过外部函数声明
             if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0) {
@@ -49,11 +58,74 @@ public class DeadCodeEliminationOptimizer {
             }
         }
 
-        // 然后尝试消除冗余跳转
+        // 最后尝试消除冗余跳转
         for (LLVMValueRef func = LLVMGetFirstFunction(module); func != null; func = LLVMGetNextFunction(func)) {
             // 跳过外部函数声明
             if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0) {
                 changed |= eliminateRedundantJumps(func);
+            }
+        }
+
+        return changed;
+    }
+
+    /**
+     * 消除死存储 - 被覆盖且从未被读取的store指令
+     *
+     * @param func 待优化的函数
+     * @return 是否进行了优化
+     */
+    private boolean eliminateDeadStores(LLVMValueRef func) {
+        boolean changed = false;
+
+        // 遍历每个基本块
+        for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
+            // 跟踪每个地址的最后一次写入
+            Map<String, LLVMValueRef> lastStore = new HashMap<>();
+            // 跟踪死存储指令
+            Set<LLVMValueRef> deadStores = new HashSet<>();
+            // 跟踪已经被读取的地址
+            Set<String> readAddresses = new HashSet<>();
+
+            // 遍历基本块中的所有指令
+            for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(inst)) {
+                if (LLVMGetInstructionOpcode(inst) == LLVMStore) {
+                    LLVMValueRef valueOp = LLVMGetOperand(inst, 0); // 存储的值
+                    LLVMValueRef ptrOp = LLVMGetOperand(inst, 1); // 存储的地址
+                    String ptrName = LLVMGetValueName(ptrOp).getString();
+
+                    // 如果这是一个局部变量（检查是否是由alloca分配的）
+                    if (ptrName != null && !ptrName.isEmpty()) {
+                        // 如果之前有对该地址的写入，且该写入未被读取，则之前的写入是死存储
+                        if (lastStore.containsKey(ptrName) && !readAddresses.contains(ptrName)) {
+                            deadStores.add(lastStore.get(ptrName));
+                        }
+
+                        // 更新该地址的最后一次写入
+                        lastStore.put(ptrName, inst);
+
+                        // 每次store之后重置该地址的读取状态
+                        readAddresses.remove(ptrName);
+                    }
+                } else if (LLVMGetInstructionOpcode(inst) == LLVMLoad) {
+                    LLVMValueRef ptrOp = LLVMGetOperand(inst, 0); // 读取的地址
+                    String ptrName = LLVMGetValueName(ptrOp).getString();
+
+                    if (ptrName != null && !ptrName.isEmpty()) {
+                        // 标记该地址已被读取
+                        readAddresses.add(ptrName);
+                    }
+                } else if (LLVMIsACallInst(inst) != null) {
+                    // 对于函数调用，保守地假设所有地址可能被读取
+                    // 如果是一个更复杂的分析，这里可以检查函数的参数类型和可能的别名
+                    readAddresses.addAll(lastStore.keySet());
+                }
+            }
+
+            // 删除所有标记为死存储的指令
+            for (LLVMValueRef deadStore : deadStores) {
+                LLVMInstructionEraseFromParent(deadStore);
+                changed = true;
             }
         }
 

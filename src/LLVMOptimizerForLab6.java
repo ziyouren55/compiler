@@ -16,8 +16,9 @@ public class LLVMOptimizerForLab6 {
 
     private LLVMModuleRef module;
     private ConstantPropagationOptimizer constantPropagation;
-    private UnusedVarEliminationOptimizer unusedVarElimination;
+    private ImprovedUnusedVarEliminator unusedVarElimination;
     private DeadCodeEliminationOptimizer deadCodeElimination;
+    private BooleanExpressionOptimizer booleanExpressionOptimizer;
 
     // 使用Map来保存每个函数的状态
     private Map<String, FunctionState> previousStates = new HashMap<>();
@@ -34,8 +35,9 @@ public class LLVMOptimizerForLab6 {
         this.module = module;
         // 初始化三个优化器
         this.constantPropagation = new ConstantPropagationOptimizer(module);
-        this.unusedVarElimination = new UnusedVarEliminationOptimizer(module);
+        this.unusedVarElimination = new ImprovedUnusedVarEliminator(module);
         this.deadCodeElimination = new DeadCodeEliminationOptimizer(module);
+        this.booleanExpressionOptimizer = new BooleanExpressionOptimizer(module);
 
         // 设置死代码消除优化器的常量传播引用，用于获取条件分支的常量值
         this.deadCodeElimination.setConstantPropagationOptimizer(constantPropagation);
@@ -54,6 +56,7 @@ public class LLVMOptimizerForLab6 {
         int iterationCount = 0;
         final int MAX_ITERATIONS = 10; // 设置最大迭代次数，防止意外的无限循环
         // new Module(module).dump(Option.of(new File(ll_output)));
+        booleanExpressionOptimizer.run();
 
         do {
 
@@ -61,18 +64,18 @@ public class LLVMOptimizerForLab6 {
             boolean changed1 = constantPropagation.run();
 
             // 应用死代码消除优化（使用常量传播的结果）
-//            boolean changed2 = deadCodeElimination.run();
+            boolean changed2 = deadCodeElimination.run();
 
             // 应用未使用变量消除优化
             boolean changed3 = unusedVarElimination.run();
 
             // 检查是否有任何变化
-            changed = changed1  || changed3;
+            changed = changed1 || changed2|| changed3;
 
             // 更新每个优化器的模块引用
             if (changed) {
                 constantPropagation = new ConstantPropagationOptimizer(module);
-                unusedVarElimination = new UnusedVarEliminationOptimizer(module);
+                unusedVarElimination = new ImprovedUnusedVarEliminator(module);
                 deadCodeElimination = new DeadCodeEliminationOptimizer(module);
                 deadCodeElimination.setConstantPropagationOptimizer(constantPropagation);
             }

@@ -1,4 +1,6 @@
 import org.bytedeco.llvm.LLVM.*;
+import org.bytedeco.llvm.global.LLVM;
+
 import java.util.*;
 
 import static org.bytedeco.llvm.global.LLVM.*;
@@ -308,6 +310,7 @@ public class ConstantPropagationOptimizer {
     public ConstantPropagationOptimizer(LLVMModuleRef module) {
         this.module = module;
         collectGlobalVariables();
+        collectAllVariables();
         recordAllInstructions();
         collectSingleStoreGlobals();
         collectSingleStoreLocals();
@@ -321,6 +324,41 @@ public class ConstantPropagationOptimizer {
         for (LLVMValueRef global = LLVMGetFirstGlobal(module); global != null; global = LLVMGetNextGlobal(global)) {
             String name = LLVMGetValueName(global).getString();
             globalVariables.add("@" + name);
+        }
+    }
+
+    /**
+     * 收集模块中的所有变量（全局变量和局部变量）
+     */
+    private void collectAllVariables() {
+        // 添加全局变量
+        globalVariables.addAll(globalVariables);
+
+        // 收集局部变量（包括alloca创建的变量和函数参数）
+        for (LLVMValueRef func = LLVMGetFirstFunction(module); func != null; func = LLVMGetNextFunction(func)) {
+            // 跳过外部函数声明
+            if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0) {
+
+                // 收集函数内部的局部变量（通过alloca指令）
+                for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock(func); bb != null; bb = LLVMGetNextBasicBlock(bb)) {
+                    for (LLVMValueRef inst = LLVMGetFirstInstruction(bb); inst != null; inst = LLVMGetNextInstruction(
+                            inst)) {
+                        if (LLVMIsAAllocaInst(inst) != null) {
+                            String varName = LLVMGetValueName(inst).getString();
+                            if (!varName.isEmpty()) {
+                                globalVariables.add(varName);
+                            }
+                        }
+                        // 也可以收集其他定义的值（如计算结果等）
+                        else if (LLVMIsAInstruction(inst) != null && LLVMGetInstructionOpcode(inst) != LLVMStore) {
+                            String instName = LLVMGetValueName(inst).getString();
+                            if (!instName.isEmpty()) {
+                                globalVariables.add(instName);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -450,15 +488,14 @@ public class ConstantPropagationOptimizer {
     /**
      * 工作列表算法求解数据流方程
      */
+    // todo 目前是in,out使用指令名称来作为key，不妥，换为变量名
     private void worklistSolve() {
         // 使用有序的指令列表初始化工作列表，保持原始执行顺序
-        Set<InstructionState> worklistSet = new LinkedHashSet<>(orderedInstructionStates);
+        List<InstructionState> worklist = new LinkedList<>(orderedInstructionStates);
 
-        while (!worklistSet.isEmpty()) {
+        while (!worklist.isEmpty()) {
             // 获取并移除第一个元素
-            Iterator<InstructionState> it = worklistSet.iterator();
-            InstructionState state = it.next();
-            it.remove();
+            InstructionState state = worklist.remove(0);
 
             // 合并前驱的out值
             Map<String, FlowValue> mergedInValues = new HashMap<>();
@@ -502,15 +539,6 @@ public class ConstantPropagationOptimizer {
                 }
             }
 
-            // 移除这个条件，确保第一条指令能被正确处理
-            // 即使没有前驱，也需要执行转移函数
-            /*
-             * if (!inChanged && mergedInValues.size() == oldInValues.size()) {
-             * // 如果in值没有变化，继续处理下一个指令
-             * continue;
-             * }
-             */
-
             // 转移函数
             Map<String, FlowValue> oldOutValues = new HashMap<>(state.getAllOutValues());
             Map<String, FlowValue> newOutValues = transfer(state.getInstruction(), mergedInValues);
@@ -537,7 +565,7 @@ public class ConstantPropagationOptimizer {
                 state.setAllOutValues(newOutValues);
 
                 for (InstructionState succ : succs.getOrDefault(state, Collections.emptyList())) {
-                    worklistSet.add(succ);
+                    worklist.add(succ);
                 }
             }
         }
@@ -569,6 +597,9 @@ public class ConstantPropagationOptimizer {
         int opcode = LLVMGetInstructionOpcode(inst);
         Map<String, FlowValue> result = new HashMap<>(inValues); // 复制输入状态作为基础
         String instName = instructionValueToString.getOrDefault(inst, LLVMPrintValueToString(inst).getString());
+        String resultName = LLVMGetValueName(inst).getString();
+        if (LLVMIsAGlobalVariable(inst) != null)
+            resultName = "@" + resultName;
 
         switch (opcode) {
             /* ---------- 二元整数运算 ---------- */
@@ -582,7 +613,7 @@ public class ConstantPropagationOptimizer {
                 FlowValue a = valueOf(op1, inValues);
                 FlowValue b = valueOf(op2, inValues);
                 FlowValue res = evaluateBinaryOp(opcode, a, b);
-                result.put(instName, res);
+                result.put(resultName, res);
                 return result;
             }
 
@@ -594,7 +625,7 @@ public class ConstantPropagationOptimizer {
                 FlowValue a = valueOf(op1, inValues);
                 FlowValue b = valueOf(op2, inValues);
                 FlowValue res = evaluateICmp(pred, a, b);
-                result.put(instName, res);
+                result.put(resultName, res);
                 return result;
             }
 
@@ -618,7 +649,7 @@ public class ConstantPropagationOptimizer {
                     }
                 }
 
-                result.put(instName, res);
+                result.put(resultName, res);
                 return result;
             }
 
@@ -626,13 +657,18 @@ public class ConstantPropagationOptimizer {
             case LLVMStore: {
                 LLVMValueRef val = LLVMGetOperand(inst, 0);
                 LLVMValueRef ptr = LLVMGetOperand(inst, 1);
-                String ptrName = LLVMPrintValueToString(ptr).getString();
+                String ptrName = LLVMGetValueName(ptr).getString();
+                if (LLVMIsAGlobalVariable(ptr) != null) {
+                    ptrName = "@" + ptrName;
+                    if (singleStoreGlobals.containsKey(ptr)) {
+                        result.put(ptrName, valueOf(val, inValues));
+                        return result;
+                    }
+                }
 
                 FlowValue valValue = valueOf(val, inValues);
-                if (valValue.isConstant() || valValue.isNac()) {
-                    // 更新内存状态
-                    result.put(ptrName, valValue);
-                }
+                FlowValue ptrValue = valueOf(ptr, inValues);
+                result.put(ptrName, FlowValue.meet(valValue, ptrValue));
 
                 return result;
             }
@@ -642,13 +678,20 @@ public class ConstantPropagationOptimizer {
             case LLVMSExt: {
                 LLVMValueRef operand = LLVMGetOperand(inst, 0);
                 FlowValue opVal = valueOf(operand, inValues);
-                result.put(instName, opVal);
+                result.put(resultName, opVal);
                 return result;
             }
 
+            case LLVMBr:
+                return result;
+
+            case LLVMAlloca:
+                result.put(resultName, FlowValue.undef());
+                return result;
+
             /* ---------- 其他指令 ---------- */
             default:
-                result.put(instName, FlowValue.nac());
+                result.put(resultName, FlowValue.nac());
                 return result;
         }
     }
@@ -662,7 +705,7 @@ public class ConstantPropagationOptimizer {
             return FlowValue.constant((int) constVal);
         }
 
-        String vName = LLVMPrintValueToString(v).getString();
+        String vName = LLVMGetValueName(v).getString();
         if (inValues.containsKey(vName)) {
             return inValues.get(vName);
         }
@@ -759,7 +802,7 @@ public class ConstantPropagationOptimizer {
      */
     private FlowValue evaluateLoad(LLVMValueRef inst, Map<String, FlowValue> inValues) {
         LLVMValueRef ptr = LLVMGetOperand(inst, 0);
-        String ptrName = LLVMPrintValueToString(ptr).getString();
+        String ptrName = LLVMGetValueName(ptr).getString();
         boolean isGlobal = LLVMIsAGlobalVariable(ptr) != null;
 
         if (isGlobal) {
@@ -790,6 +833,7 @@ public class ConstantPropagationOptimizer {
     /**
      * 应用优化 - 替换常量并删除冗余指令
      */
+    // todo 删除逻辑有问题
     private boolean rewriteConstants() {
         boolean changed = false;
         List<LLVMValueRef> toRemove = new ArrayList<>();
@@ -799,8 +843,10 @@ public class ConstantPropagationOptimizer {
             InstructionState state = entry.getValue();
             String instString = state.getInstructionString();
 
+            String LvalueName = LLVMGetValueName(inst).getString();
+
             // 查找该指令自身的输出值
-            FlowValue outVal = state.getOutValue(instString);
+            FlowValue outVal = state.getOutValue(LvalueName);
 
             if (outVal != null && outVal.isConstant()) {
                 LLVMValueRef c = LLVMConstInt(LLVMTypeOf(inst), outVal.getConstValue(), 0);

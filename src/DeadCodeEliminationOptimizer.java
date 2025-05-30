@@ -19,7 +19,7 @@ public class DeadCodeEliminationOptimizer {
 
     private LLVMModuleRef module;
     private ConstantPropagationOptimizer constPropOptimizer;
-//    String op_ll_output = "./tests/ll_out/op_output.ll";
+    String op_ll_output = "./tests/ll_out/op_output.ll";
 
     // 全局CFG字段
     private Map<BlockState, Set<BlockState>> successors = new HashMap<>();
@@ -97,7 +97,7 @@ public class DeadCodeEliminationOptimizer {
             // 跳过外部函数声明
             if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0) {
                 changed |= eliminateDeadStores(func);
-//                new Module(module).dump(Option.of(new File(op_ll_output)));
+                utils.dump(op_ll_output, module);
             }
         }
 
@@ -108,7 +108,7 @@ public class DeadCodeEliminationOptimizer {
             // 跳过外部函数声明
             if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0) {
                 changed |= eliminateUnreachableCode(func);
-//                new Module(module).dump(Option.of(new File(op_ll_output)));
+                utils.dump(op_ll_output, module);
             }
         }
 
@@ -117,7 +117,7 @@ public class DeadCodeEliminationOptimizer {
             // 跳过外部函数声明
             if (LLVMIsAFunction(func) != null && LLVMCountBasicBlocks(func) > 0) {
                 changed |= eliminateRedundantJumps(func);
-//                new Module(module).dump(Option.of(new File(op_ll_output)));
+                utils.dump(op_ll_output, module);
             }
         }
 
@@ -203,7 +203,7 @@ public class DeadCodeEliminationOptimizer {
         // 检测条件分支的条件是否为常量
         changed |= simplifyConstantBranches(func);
 
-//        new Module(module).dump(Option.of(new File(op_ll_output)));
+        utils.dump(op_ll_output, module);
 
         // 查找没有前驱的基本块（除了入口块）
         Set<BlockState> unreachableBlocks = findUnreachableBlocks(func, predecessors, successors);
@@ -226,7 +226,7 @@ public class DeadCodeEliminationOptimizer {
             LLVMRemoveBasicBlockFromParent(blockState.getBlock());
             changed = true;
         }
-//        new Module(module).dump(Option.of(new File(op_ll_output)));
+        utils.dump(op_ll_output, module);
 
         return changed;
     }
@@ -444,39 +444,31 @@ public class DeadCodeEliminationOptimizer {
                 BlockState targetState = blockStateMap.get(info.targetBlock);
                 if (sourceState == null || targetState == null)
                     continue;
-                // 1. 移除跳转指令
+                // 1. 移除source块的跳转指令
                 LLVMInstructionEraseFromParent(info.branchInst);
-                // 2. 将目标块中的所有指令移动到当前块
+                // 2. 将target块中的所有指令移动到source块末尾
                 moveInstructionsToBlock(info.targetBlock, info.sourceBlock);
                 // 3. 更新CFG
-                // a. 将source的所有后继（除了target）转移到target
-                for (BlockState succ : new HashSet<>(successors.getOrDefault(sourceState, Collections.emptySet()))) {
-                    if (!succ.equals(targetState)) {
-                        successors.get(targetState).add(succ);
-                        predecessors.get(succ).remove(sourceState);
-                        predecessors.get(succ).add(targetState);
-                    }
+                // a. 将target的所有后继转移到source
+                for (BlockState succ : new HashSet<>(successors.getOrDefault(targetState, Collections.emptySet()))) {
+                    successors.get(sourceState).add(succ);
+                    predecessors.get(succ).remove(targetState);
+                    predecessors.get(succ).add(sourceState);
                 }
-                // b. 将target的所有前驱中的source替换为source的所有前驱
-                for (BlockState pred : new HashSet<>(predecessors.getOrDefault(sourceState, Collections.emptySet()))) {
-                    if (!pred.equals(targetState)) {
-                        successors.get(pred).remove(sourceState);
-                        successors.get(pred).add(targetState);
-                        predecessors.get(targetState).add(pred);
-                    }
+                // b. 将target的所有前驱（理论上只有source）移除target
+                for (BlockState pred : new HashSet<>(predecessors.getOrDefault(targetState, Collections.emptySet()))) {
+                    successors.get(pred).remove(targetState);
                 }
-                // c. 移除source和target之间的前驱/后继关系
-                successors.getOrDefault(sourceState, new HashSet<>()).remove(targetState);
-                predecessors.getOrDefault(targetState, new HashSet<>()).remove(sourceState);
-                // d. 移除source块的所有CFG信息
-                successors.remove(sourceState);
-                predecessors.remove(sourceState);
-                // 4. 删除目标块（现在应该是空的）
+                // c. 移除target块的所有CFG信息
+                successors.remove(targetState);
+                predecessors.remove(targetState);
+                // 4. 删除target块
                 LLVMRemoveBasicBlockFromParent(info.targetBlock);
                 // 5. 更新blockStateMap
                 blockStateMap.remove(info.targetBlock);
                 merged = true;
                 changed = true;
+                utils.dump(op_ll_output, module);
             }
         } while (merged);
         return changed;
@@ -500,8 +492,13 @@ public class DeadCodeEliminationOptimizer {
 
         // 移动每条指令
         for (LLVMValueRef inst : instructions) {
+            String instName = LLVMGetValueName(inst).getString();
             LLVMInstructionRemoveFromParent(inst);
             LLVMInsertIntoBuilder(builder, inst);
+            if(!instName.isEmpty())
+            {
+                LLVMSetValueName(inst,instName);
+            }
         }
 
         LLVMDisposeBuilder(builder);

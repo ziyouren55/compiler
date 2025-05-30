@@ -1,41 +1,20 @@
+const int gc1 = 5;
+int g1 = 3, g2 = 7;
+
 int main() {
-    const int FLAG_A = 0;         // 死代码相关常量
-    const int FLAG_B = 5;         // 常量传播候选1
-    const int FLAG_C = 10;        // 常量传播候选2
-    const int LOOP_COUNT = 3;     // 循环次数常量
-
-    int result = FLAG_B;          // 初始值来自常量
-    int counter = 0;
-    int temp = 0;
-
-    // 包含死代码的分支结构
-    if (FLAG_A) {                 // 永远为假的死代码
-        temp = FLAG_C * 2;        // 此代码块应被消除
-        result = result + temp;
-    } else if (FLAG_B > LOOP_COUNT) {  // 常量传播候选
-        result = result + FLAG_B;         // 应替换为 result += 5
-        temp = FLAG_C / 2;        // 应被传播
+    /* 第一阶段：简单if语句（1变量）*/
+    int a = gc1 + g1;      // 5 + 3 = 8
+    if (a > 5) {
+        a = a + 2;         // a = 8 + 2 = 10
     }
 
-    // 包含死代码的循环结构
-    while (counter < LOOP_COUNT) { // 常量传播确定循环3次
-        if (FLAG_C) {             // 永远为真的有效代码
-            temp = temp + FLAG_C;       // 应替换为 temp += 10
-        } else {
-            temp = counter;       // 此分支不可达（死代码）
-        }
-
-        // 死代码：永远不执行的代码块
-        if (0) {                  // 显式死代码
-            result = result + 2;          // 此代码应被消除
-        }
-
-        counter = counter + 1;
+    /* 第二阶段：while循环（1变量）*/
+    int b = 0;
+    while (b < gc1) {
+        b = b + 1;         // b = b + 1
     }
 
-    // 死代码：未使用变量和无效计算
-    int unused_var = FLAG_A + FLAG_C; // 未被使用的变量
 
-    // 最终计算应包含常量传播结果
-    return result + temp + LOOP_COUNT;
+    // 最终结果验证
+    return a + b;   // 返回 10 + 5 + 3 + 2 + 7 + 4 = 31
 }

@@ -393,6 +393,9 @@ public class ConstantPropagationOptimizer {
         instructionStates.clear();
         preds.clear();
         succs.clear();
+        globalVariables.clear();
+        instructionStringToValue.clear();
+        instructionValueToString.clear();
 
         // 构建控制流图和指令状态
         buildCFG(func);

@@ -8,6 +8,6 @@ public class utils
 {
     static void dump(String path, LLVMModuleRef module)
     {
-        new Module(module).dump(Option.of(new File(path)));
+//        new Module(module).dump(Option.of(new File(path)));
     }
 }

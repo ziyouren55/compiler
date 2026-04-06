@@ -1,3 +1,5 @@
+import LLVMopt.LLVMOptimizerForLab6;
+import LLVMopt.utils;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.*;
@@ -7,7 +9,6 @@ import org.llvm4j.llvm4j.Module;
 import org.llvm4j.optional.Option;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 
 //java -jar .\lib\antlr-4.9.1-complete.jar -listener -visitor -long-messages .\src\SysYLexer.g4 .\src\SysYParser.g4
@@ -42,7 +43,7 @@ public class Main {
         module.dump(Option.of(new File(output)));
 
         // 生成RISC-V汇编代码
-        // RISCVCGVisitor riscvVisitor = new RISCVCGVisitor(module);
+        // asmgen.RISCVCGVisitor riscvVisitor = new asmgen.RISCVCGVisitor(module);
         // String asmCode = riscvVisitor.generateCode();
         //
         // // 写入输出文件

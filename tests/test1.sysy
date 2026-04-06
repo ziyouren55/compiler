@@ -1,20 +1,7 @@
-const int gc1 = 5;
-int g1 = 3, g2 = 7;
-
-int main() {
-    /* 第一阶段：简单if语句（1变量）*/
-    int a = gc1 + g1;      // 5 + 3 = 8
-    if (a > 5) {
-        a = a + 2;         // a = 8 + 2 = 10
+int main(){
+    int a = 1;
+    return 2;
+    if(a < 2){
+        return 1;
     }
-
-    /* 第二阶段：while循环（1变量）*/
-    int b = 0;
-    while (b < gc1) {
-        b = b + 1;         // b = b + 1
-    }
-
-
-    // 最终结果验证
-    return a + b;   // 返回 10 + 5 + 3 + 2 + 7 + 4 = 31
 }
